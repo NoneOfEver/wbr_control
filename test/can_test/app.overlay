@@ -1,0 +1,6 @@
+&mcan4 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_mcan4>;
+	pinctrl-names = "default";
+	bus-speed = <500000>;
+};

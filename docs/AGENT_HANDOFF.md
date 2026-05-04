@@ -1,0 +1,145 @@
+# rm_test Agent Handoff（当前可接手版本）
+
+日期：2026-04-05  
+范围：applications/rm_test
+
+目录重构规划：
+- 详见 `docs/DIRECTORY_RESTRUCTURE_PLAN.md`
+
+目录导览（入口与 active/staged 状态）：
+- 详见 `docs/DIRECTORY_GUIDE.md`
+
+模块状态维护约定：
+- 详见 `docs/MODULE_LIFECYCLE_POLICY.md`
+
+平台 legacy 归档策略：
+- 详见 `docs/PLATFORM_LEGACY_ARCHIVE_POLICY.md`
+
+## 1. 一句话结论
+
+rm_test 已经不是“仅骨架”阶段，而是“主干可运行 + 分层已解耦到服务层 + 正在做边界收口”的阶段。
+
+## 2. 当前真实架构
+
+启动链路：
+- main -> app_main -> Bootstrap -> ModuleManager
+
+分层结构：
+- bootstrap：启动编排、模块生命周期
+- modules：remote_input、chassis
+- services：actuator、chassis_tuning、runtime_init
+- channels：zbus 消息主题
+- protocols：motors 协议编解码
+- platform：uart/can/littlefs 与板级封装
+
+核心解耦状态：
+- bootstrap 层已通过注册钩子调用模块注册，不再直接依赖 modules 注册头。
+- Bootstrap 已通过 runtime_init_service 初始化基础设施，不再直连 UART/CAN/LittleFS 具体实现。
+- chassis 已通过 actuator service 下发，不再在业务层直接调用 can_dispatch。
+- shell 调参通过 chassis_tuning_service 与 provider 对接，不再通过模块全局桥接函数。
+
+结构迁移状态（阶段 B）：
+- 启动与模块管理实现已迁移到 `app/bootstrap/`。
+- 核心命名空间已迁移为 `rm_test::app::bootstrap`。
+- `app/core` 已彻底删除（无兼容层残留），统一使用 `rm_test/app/bootstrap/*` 头路径。
+- 已建立 `app/*` 语义目录与 `rm_test/app/*` 稳定头入口，active 主链路 include 已切换到 domain 前缀。
+- `app/channels` 实体文件已迁移到 `app/channels`；当前 `app/channels` 仅保留迁移说明。
+- `app/services` 实体文件已迁移到 `app/services`；当前 `app/services` 仅保留迁移说明。
+- `app/modules` 实体文件已迁移到 `app/modules`；当前 `app/modules` 仅保留迁移说明。
+- `app/protocols` 实体文件已迁移到 `app/protocols`；当前 `app/protocols` 仅保留迁移说明。
+- staged 模块已统一收敛到 `app/modules/staging/*`，active 与 staged 已物理分区。
+- 算法目录已完成当前轮次去重：移除 MahonyAHRS 占位重复文件与空壳 orientation 目录，并新增 `tools/algorithms_dedupe_audit.sh` 审计脚本。
+- 平台历史资产已建立 `platform/legacy/*` 归档分区；`legacy_dm_h723` 已归档到 `platform/legacy/board/legacy_dm_h723`。
+
+## 3. 构建现状
+
+默认构建已接入：
+- bootstrap：bootstrap、module_manager
+- modules：remote_input、chassis、modules_registry
+- services：actuator、chassis_tuning、runtime_init
+- channels：system_status、chassis_command、chassis_state、remote_input、motor_feedback
+- protocols/motors：dji、dm、cubemars（按具体协议直接接入）
+- algorithms：alg_pid、alg_math
+- platform：board_identity
+
+条件构建：
+- UART dispatch：由 RM_TEST_RUNTIME_INIT_UART 控制
+- CAN dispatch：由 RM_TEST_RUNTIME_INIT_CAN 控制
+- LittleFS service：由 RM_TEST_RUNTIME_INIT_LITTLEFS 或 RM_TEST_SHELL_CHASSIS_TUNING 控制
+- chassis tuning shell：由 RM_TEST_SHELL_CHASSIS_TUNING 控制
+
+说明：
+- 已完成 runtime 的编译期裁剪，不再只是“初始化行为开关”。
+
+## 4. Kconfig 关键开关
+
+模块与调试：
+- RM_TEST_MODULE_REMOTE_INPUT
+- RM_TEST_MODULE_CHASSIS
+- RM_TEST_SHELL_CHASSIS_TUNING
+
+runtime 初始化：
+- RM_TEST_RUNTIME_INIT_UART（depends on SERIAL）
+- RM_TEST_RUNTIME_INIT_CAN（depends on CAN）
+- RM_TEST_RUNTIME_INIT_LITTLEFS（depends on FILE_SYSTEM_LITTLEFS）
+
+## 5. 当前验证状态
+
+已验证：
+- 默认配置可成功编译并链接 zephyr.elf。
+- 关闭 CAN runtime 初始化（overlay: RM_TEST_RUNTIME_INIT_CAN=n）时可成功构建。
+- CAN 关闭场景下镜像 ROM 有下降，说明编译期裁剪生效。
+
+已知非阻塞告警：
+- dts 中 bus-speed deprecated（上游绑定告警）
+- HPM SDK 与 Zephyr 的 ARRAY_SIZE 宏重定义
+
+## 6. 尚未完成的重点
+
+P0（高优先）：
+1. 文档全量同步
+- 现已更新 LAYERING_DECOUPLING_STATUS 与本 handoff。
+- 仍建议后续检查 MIGRATION_PLAN 中“进行中”措辞，避免误导为骨架阶段。
+
+P1（下一阶段）：
+2. actuator service 抽象提升
+- 已完成通用接口与分发表改造第一阶段，当前已覆盖 DJI 0x200 与 0x1FF 两组；后续可继续扩展到更多执行组/协议族。
+
+3. chassis_tuning provider 生命周期完善
+- 已完成：服务已升级为多 provider registry，支持按名称/优先级注册并选择 active provider；shell 可观测 active provider 名称/优先级/数量。
+
+P2（演进）：
+4. include 可见范围收敛
+- 已完成第二步：已移除 `platform/drivers/communication`、`platform/storage/filesystem`、`app` 直曝 include 目录；上层 include 已迁移到 `rm_test/platform/...` 与 `rm_test/app/...` 稳定前缀。
+
+5. 回归测试与回放资产补齐
+- 已完成第一步：新增最小 smoke 回归脚本 `applications/rm_test/tools/smoke_regression.sh`（文档见 `applications/rm_test/docs/SMOKE_REGRESSION.md`）；后续仍需补齐行为一致性回放与实机时序测试。
+
+## 7. 后续 agent 操作建议
+
+1. 先看 CMake 与 Kconfig，再改业务代码
+- 当前工程功能由开关与条件编译驱动，先确认构建开关再动代码可减少返工。
+
+2. 改动通信或存储路径时优先落在 services 层
+- 继续保持 modules 不直连 platform 的边界。
+
+3. 改动后至少做两种配置构建验证
+- 默认配置
+- 至少一个裁剪配置（例如 CAN off）
+
+4. 调参链路联调可先用状态命令检查 provider
+- shell: `chassis pid status`
+- 输出 `provider=ready/not_ready` 可快速判断调参接口是否已绑定到模块。
+
+5. 提交前可执行最小回归脚本
+- `bash applications/rm_test/tools/smoke_regression.sh`
+- 覆盖：启动链路、模块注册链路、调参链路可用性、默认/CAN-off 构建。
+
+## 8. 不要再按旧结论行动
+
+以下旧结论已不成立：
+- “app/modules 与 app/protocols 尚未接入默认构建”
+- “ModuleManager 还没有实际内建模块实例”
+- “chassis 仍直接调用 can_dispatch”
+
+请以后以本文件与 LAYERING_DECOUPLING_STATUS 的最新版本为准。

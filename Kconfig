@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: Apache-2.0
+
+source "Kconfig.zephyr"
+
+menu "rm_test application options"
+
+config RM_TEST_MODULE_REMOTE_INPUT
+	bool "Enable remote_input module"
+	default y
+	help
+	  Enable registering and starting the remote_input module.
+
+config RM_TEST_MODULE_CHASSIS
+	bool "Enable chassis module"
+	default y
+	help
+	  Enable registering and starting the chassis module.
+
+config RM_TEST_MODULE_ARM
+	bool "Enable arm module"
+	default y
+	help
+	  Enable registering and starting the arm module.
+
+config RM_TEST_MODULE_GIMBAL
+	bool "Enable gimbal module"
+	default y
+	help
+	  Enable registering and starting the gimbal module.
+
+config RM_TEST_MODULE_GANTRY
+	bool "Enable gantry module"
+	default y
+	help
+	  Enable registering and starting the gantry module.
+
+config RM_TEST_MODULE_REFEREE
+	bool "Enable referee module"
+	default n
+	help
+	  Enable registering and starting the referee module.
+
+config RM_TEST_MODULE_SYS_STATE
+	bool "Enable status indicator module"
+	default y
+	depends on GPIO || PWM
+	help
+	  Enable registering and starting the system status indicator module.
+	  The module supports RGB breathing LED and optional PWM buzzer output.
+
+config RM_TEST_SHELL_CHASSIS_TUNING
+	bool "Enable chassis tuning shell commands"
+	default y
+	depends on SHELL
+	help
+	  Enable chassis pid get/set/save/load/reset_i shell commands.
+
+config RM_TEST_SHELL_MAVLINK_CONTROL
+	bool "Enable MAVLink shell control command"
+	default y
+	depends on SHELL
+	help
+	  Enable `mavlink on/off/status` shell command. When enabled,
+	  MAVLink bytes are received on the same shell UART by using shell bypass.
+
+config RM_TEST_RUNTIME_INIT_UART
+	bool "Initialize UART dispatch in bootstrap"
+	default y
+	depends on SERIAL
+	help
+	  Enable UART dispatch initialization during runtime bootstrap.
+
+config RM_TEST_RUNTIME_INIT_CAN
+	bool "Initialize CAN dispatch in bootstrap"
+	default y
+	depends on CAN
+	help
+	  Enable CAN dispatch initialization during runtime bootstrap.
+
+config RM_TEST_RUNTIME_INIT_USB
+	bool "Initialize USB session in bootstrap"
+	default n
+	depends on CHERRYUSB_DEVICE && CHERRYUSB_DEVICE_CDC_ACM
+	help
+	  Enable CherryUSB CDC-ACM session initialization during runtime bootstrap.
+
+config RM_TEST_RUNTIME_INIT_LITTLEFS
+	bool "Initialize LittleFS in bootstrap"
+	default y
+	depends on FILE_SYSTEM_LITTLEFS
+	help
+	  Enable LittleFS initialization during runtime bootstrap.
+
+endmenu

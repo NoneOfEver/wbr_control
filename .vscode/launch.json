@@ -1,0 +1,55 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "RM_TEST: Cortex-Debug (DAPLink OpenOCD)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/zephyr/zephyr.elf",
+      "servertype": "openocd",
+      "serverpath": "${workspaceFolder}/../../tools/usr/local/bin/openocd",
+      "gdbPath": "${workspaceFolder}/../../zephyr-sdk-0.16.5/riscv64-zephyr-elf/bin/riscv64-zephyr-elf-gdb",
+      "configFiles": [
+        "${workspaceFolder}/../../sdk_env/hpm_sdk/boards/openocd/probes/cmsis_dap.cfg",
+        "${workspaceFolder}/../../sdk_env/hpm_sdk/boards/openocd/soc/hpm6e80-single-core.cfg",
+        "${workspaceFolder}/../../sdk_env/hpm_sdk/boards/openocd/boards/hpm6e00evk.cfg"
+      ],
+      "searchDir": [
+        "${workspaceFolder}/boards/hpmicro/hpm6e00evk_v2/support",
+        "${workspaceFolder}/../../sdk_env/hpm_sdk/boards/openocd/probes",
+        "${workspaceFolder}/../../sdk_env/hpm_sdk/boards/openocd/soc",
+        "${workspaceFolder}/../../sdk_env/hpm_sdk/boards/openocd/boards",
+        "${workspaceFolder}/../../sdk_env/hpm_sdk/boards/openocd"
+      ],
+      "openOCDLaunchCommands": [
+        "adapter speed 4000"
+      ],
+      "preLaunchCommands": [
+        "monitor halt"
+      ],
+      "postLaunchCommands": [
+        "monitor halt"
+      ],
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "raw",
+      "svdFile": "",
+      "overrideLaunchCommands": [
+        "monitor halt",
+        "load"
+      ]
+    },
+    {
+      "name": "RM_TEST: Cortex-Debug Attach :3333",
+      "type": "cortex-debug",
+      "request": "attach",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/zephyr/zephyr.elf",
+      "servertype": "external",
+      "gdbTarget": "localhost:3333",
+      "gdbPath": "${workspaceFolder}/../../zephyr-sdk-0.16.5/riscv64-zephyr-elf/bin/riscv64-zephyr-elf-gdb",
+      "showDevDebugOutput": "raw",
+      "runToEntryPoint": "main"
+    }
+  ]
+}

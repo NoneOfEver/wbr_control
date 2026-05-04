@@ -1,0 +1,37 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#ifndef RM_TEST_APP_PROTOCOLS_PC_LINK_PC_LINK_H_
+#define RM_TEST_APP_PROTOCOLS_PC_LINK_PC_LINK_H_
+
+#include <stddef.h>
+#include <stdint.h>
+
+namespace rm_test::app::protocols::pc_link {
+
+constexpr uint8_t kFrameSof = 0xa5U;
+
+struct PcFrameHeader {
+	uint8_t sof;
+	uint16_t data_length;
+	uint8_t seq;
+	uint8_t reserved;
+};
+
+struct PcFrame {
+	uint16_t cmd_id;
+	const uint8_t *payload;
+	uint16_t payload_len;
+};
+
+int EncodeFrame(uint16_t cmd_id,
+		const uint8_t *payload,
+		size_t payload_len,
+		uint8_t *out,
+		size_t out_capacity,
+		size_t *out_len);
+
+int DecodeFrame(const uint8_t *frame, size_t frame_len, PcFrame *out);
+
+}  // namespace rm_test::app::protocols::pc_link
+
+#endif /* RM_TEST_APP_PROTOCOLS_PC_LINK_PC_LINK_H_ */
