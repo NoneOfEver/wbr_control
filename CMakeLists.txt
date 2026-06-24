@@ -8,6 +8,8 @@ set(HPM_ZEPHYR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../hpm_support)
 set(HPM_SDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sdk_env/hpm_sdk)
 set(HPM_ENV_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sdk_env)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 list(APPEND BOARD_ROOT ${HPM_ZEPHYR_DIR})
 
@@ -16,7 +18,7 @@ project(wbr_control)
 
 target_include_directories(app PRIVATE
   .
-  app/algorithms
+  algorithms
   ${HPM_SDK_DIR}/middleware/hpm_math/nds_dsp
 )
 
