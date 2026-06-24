@@ -7,6 +7,7 @@
 
 #include <errno.h>
 
+#include <algorithm>
 #include <modules/thread_utils.h>
 #include <modules/chassis/chassis_module.h>
 #include <protocols/motors/dji_motor_protocol.h>
