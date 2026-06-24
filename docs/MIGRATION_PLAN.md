@@ -25,15 +25,15 @@
 
 ### 3.1 主运行链路已完成迁移
 
-- 启动链路：main -> app_main -> Bootstrap -> ModuleManager。
+- 启动链路：main -> infrastructure init -> modules。
 - active 模块：remote_input、chassis。
-- 服务层：actuator、chassis_tuning、runtime_init。
+- 服务层：actuator、chassis_tuning。
 - 协议层：motors（dji/dm/cubemars）。
 - 通信链路：UART/CAN dispatch 已接线。
 
 ### 3.2 目录与分层已完成收敛
 
-- app/core -> app/bootstrap 已完成并删除兼容层。
+- app/core -> app/modules 已完成并删除兼容层。
 - channels/services/modules/protocols 实体已收敛到 app 顶层同名目录。
 - staged 模块已集中到 app/modules/staging。
 - 平台 legacy 分区已建立：platform/legacy。

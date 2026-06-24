@@ -1,5 +1,3 @@
-add_subdirectory(src)
-add_subdirectory(bootstrap)
 add_subdirectory(services)
 add_subdirectory(modules)
 add_subdirectory(algorithms)

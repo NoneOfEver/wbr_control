@@ -22,26 +22,26 @@ rm_test 已经不是“仅骨架”阶段，而是“主干可运行 + 分层已
 ## 2. 当前真实架构
 
 启动链路：
-- main -> app_main -> Bootstrap -> ModuleManager
+- main -> infrastructure init -> modules
 
 分层结构：
-- bootstrap：启动编排、模块生命周期
-- modules：remote_input、chassis
-- services：actuator、chassis_tuning、runtime_init
+- src/main.cpp：启动编排
+- modules：remote_input、chassis 等业务模块
+- services：actuator、chassis_tuning
 - channels：zbus 消息主题
 - protocols：motors 协议编解码
 - platform：uart/can/littlefs 与板级封装
 
 核心解耦状态：
-- bootstrap 层已通过注册钩子调用模块注册，不再直接依赖 modules 注册头。
-- Bootstrap 已通过 runtime_init_service 初始化基础设施，不再直连 UART/CAN/LittleFS 具体实现。
+- main 按 Kconfig 条件直接初始化并启动模块，不再使用注册表。
+- main 按 Kconfig 条件直接初始化 UART/CAN/USB/LittleFS 基础设施。
 - chassis 已通过 actuator service 下发，不再在业务层直接调用 can_dispatch。
 - shell 调参通过 chassis_tuning_service 与 provider 对接，不再通过模块全局桥接函数。
 
 结构迁移状态（阶段 B）：
-- 启动与模块管理实现已迁移到 `app/bootstrap/`。
-- 核心命名空间已迁移为 `rm_test::app::bootstrap`。
-- `app/core` 已彻底删除（无兼容层残留），统一使用 `rm_test/app/bootstrap/*` 头路径。
+- 启动编排已收敛到 `src/main.cpp`，模块实例也在 main 中直接拉起。
+- 核心命名空间已迁移为 `rm_test::app::modules`。
+- `app/core` 已彻底删除（无兼容层残留），统一使用 `rm_test/app/modules/*` 头路径。
 - 已建立 `app/*` 语义目录与 `rm_test/app/*` 稳定头入口，active 主链路 include 已切换到 domain 前缀。
 - `app/channels` 实体文件已迁移到 `app/channels`；当前 `app/channels` 仅保留迁移说明。
 - `app/services` 实体文件已迁移到 `app/services`；当前 `app/services` 仅保留迁移说明。
@@ -54,9 +54,8 @@ rm_test 已经不是“仅骨架”阶段，而是“主干可运行 + 分层已
 ## 3. 构建现状
 
 默认构建已接入：
-- bootstrap：bootstrap、module_manager
-- modules：remote_input、chassis、modules_registry
-- services：actuator、chassis_tuning、runtime_init
+- modules：remote_input、chassis
+- services：actuator、chassis_tuning
 - channels：system_status、chassis_command、chassis_state、remote_input、motor_feedback
 - protocols/motors：dji、dm、cubemars（按具体协议直接接入）
 - algorithms：alg_pid、alg_math
@@ -133,13 +132,13 @@ P2（演进）：
 
 5. 提交前可执行最小回归脚本
 - `bash applications/rm_test/tools/smoke_regression.sh`
-- 覆盖：启动链路、模块注册链路、调参链路可用性、默认/CAN-off 构建。
+- 覆盖：启动链路、模块 Kconfig 裁剪、调参链路可用性、默认/CAN-off 构建。
 
 ## 8. 不要再按旧结论行动
 
 以下旧结论已不成立：
 - “app/modules 与 app/protocols 尚未接入默认构建”
-- “ModuleManager 还没有实际内建模块实例”
+- “模块还需要通过注册表拉起”
 - “chassis 仍直接调用 can_dispatch”
 
 请以后以本文件与 LAYERING_DECOUPLING_STATUS 的最新版本为准。

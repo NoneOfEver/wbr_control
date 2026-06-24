@@ -8,10 +8,10 @@
 当前工程的分层解耦已进入“主干完成、细节收口”阶段。
 
 现状主干：
-- 启动层：main -> app_main -> Bootstrap
-- 编排层：ModuleManager（通过 bootstrap 注册钩子注册应用模块）
+- 启动层：main
+- 编排层：main 直接按 Kconfig 条件初始化并启动模块
 - 业务层：remote_input / chassis
-- 服务层：actuator / chassis_tuning / runtime_init
+- 服务层：actuator / chassis_tuning
 - 协议层：app/protocols/motors
 - 消息层：zbus channels
 - 平台层：platform/drivers + platform/storage
@@ -24,40 +24,36 @@
 - 已关闭：chassis 业务层直连 can_dispatch。
 - 已关闭：shell 通过模块全局桥接调参。
 - 已关闭：core 直接 include modules 注册头。
-- 已关闭：Bootstrap 直连 UART/CAN/LittleFS 初始化实现。
+- 已关闭：main 直连 UART/CAN/LittleFS 初始化实现。
 
 ---
 
 ## 2. 已完成项（按解耦目标）
 
-### 2.1 bootstrap 与 modules 的边界解耦
+### 2.1 main 与 modules 的启动边界
 
 已完成：
-- bootstrap 层通过抽象钩子 `RegisterApplicationModules()` 注册模块，不再直接依赖 modules registry 头文件。
-- modules 层承接钩子实现并按 Kconfig 条件注册模块。
+- main 按 Kconfig 条件直接初始化并启动模块。
+- modules 层保留各自 `Initialize()` / `Start()` 生命周期函数。
 
 关键落点：
-- app/bootstrap/include/rm_test/app/bootstrap/module_registry_hook.h
-- app/bootstrap/src/module_manager.cpp
-- app/modules/modules_registry.cpp
+- src/main.cpp
+- app/modules/*/*_module.{h,cpp}
 
 收益：
-- bootstrap 层对具体业务模块“只知接口，不知实现目录”。
+- 启动顺序更直观，不再需要注册表中转。
 - 新增/裁剪模块时，核心编排层改动面更小。
 
 ### 2.2 启动编排与平台初始化解耦
 
 已完成：
-- Bootstrap 仅调用 runtime 初始化服务。
-- UART/CAN/LittleFS 初始化收敛到 `runtime_init_service`。
+- main 按 Kconfig 条件直接初始化 UART/CAN/USB/LittleFS。
 
 关键落点：
-- app/bootstrap/src/bootstrap.cpp
-- app/services/runtime/runtime_init_service.h
-- app/services/runtime/runtime_init_service.cpp
+- src/main.cpp
 
 收益：
-- 启动顺序仍集中可控，具体平台初始化细节从 Bootstrap 剥离。
+- 启动顺序仍集中可控，入口能直接看到完整初始化流程。
 
 ### 2.3 业务执行路径解耦（chassis -> actuator -> platform）
 
@@ -101,8 +97,8 @@
 关键落点：
 - Kconfig
 - CMakeLists.txt
-- app/modules/modules_registry.cpp
-- app/services/runtime/runtime_init_service.cpp
+- src/main.cpp
+- src/main.cpp
 
 说明：
 - runtime 已支持编译期裁剪：相关驱动/存储源按 Kconfig 条件加入构建。

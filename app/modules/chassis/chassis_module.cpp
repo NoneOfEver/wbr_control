@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include <app/bootstrap/thread_utils.h>
+#include <app/modules/thread_utils.h>
 #include <app/modules/chassis/chassis_module.h>
 #include <app/protocols/motors/dji_motor_protocol.h>
 #include <app/services/actuator/actuator_service.h>
@@ -114,7 +114,7 @@ int ChassisModule::Start()
 		return 0;
 	}
 
-	bootstrap::StartMemberThread<ChassisModule, &ChassisModule::RunLoop>(
+	::rm_test::app::modules::StartMemberThread<ChassisModule, &ChassisModule::RunLoop>(
 		&thread_,
 		g_chassis_module_stack,
 		K_THREAD_STACK_SIZEOF(g_chassis_module_stack),

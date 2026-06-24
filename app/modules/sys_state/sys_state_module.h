@@ -7,7 +7,6 @@
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/kernel.h>
 
-#include <app/bootstrap/module.h>
 
 namespace rm_test::app::modules::sys_state {
 
@@ -31,11 +30,11 @@ enum : uint32_t {
 
 extern volatile uint32_t g_sys_state_diag_state;
 
-class SysStateModule : public bootstrap::Module {
+class SysStateModule {
 public:
-	const char *Name() const override { return "sys_state"; }
-	int Initialize() override;
-	int Start() override;
+	const char *Name() const { return "sys_state"; }
+	int Initialize();
+	int Start();
 
 private:
 	void RunLoop();

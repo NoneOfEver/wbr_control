@@ -8,17 +8,16 @@
 #include <zephyr/kernel.h>
 
 #include <app/algorithms/control/alg_pid.h>
-#include <app/bootstrap/module.h>
 #include <app/channels/can_raw_frame_queue.h>
 #include <app/channels/gantry_command_channel.h>
 
 namespace rm_test::app::modules::gantry {
 
-class GantryModule : public bootstrap::Module {
+class GantryModule {
 public:
-	const char *Name() const override { return "gantry"; }
-	int Initialize() override;
-	int Start() override;
+	const char *Name() const { return "gantry"; }
+	int Initialize();
+	int Start();
 
 	void XAxisMoveInDistance(float distance);
 	void YAxisMoveInDistance(float distance);

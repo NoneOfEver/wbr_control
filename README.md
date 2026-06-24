@@ -22,8 +22,8 @@
 
 | 层级 | 职责 |
 |------|------|
-| `src/` | Zephyr 入口，`main()` 仅做启动转发 |
-| `bootstrap/` | 启动编排、模块注册与拉起 |
+| `src/` | Zephyr 入口，`main()` 完成启动编排 |
+| `app/modules/` | 模块注册与拉起基础设施 |
 | `modules/` | 业务模块（remote_input、chassis 等） |
 | `services/` | 执行器抽象、调参服务、运行时初始化 |
 | `channels/` | zbus 消息主题定义 |

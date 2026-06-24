@@ -6,8 +6,6 @@
 
 1. 程序入口
 - src/main.cpp
-- app/src/app_main.cpp
-- app/bootstrap/src/bootstrap.cpp
 
 2. 当前运行主链路（active）
 - 输入模块：app/modules/remote_input
@@ -25,7 +23,7 @@
 ## 2. 目录分层速览
 
 - src/: Zephyr 主入口
-- app/bootstrap/: 启动编排与模块生命周期管理
+- app/modules/: 模块生命周期管理
 - app/: 领域语义聚合入口（含 channels/modules/services/protocols）
 - app/modules/: legacy 说明目录（实体实现已迁移至 app/modules）
 - app/services/: legacy 说明目录（实体实现已迁移至 app/services）
@@ -62,7 +60,7 @@
 1. docs/AGENT_HANDOFF.md
 2. docs/LAYERING_DECOUPLING_STATUS.md
 3. docs/DIRECTORY_RESTRUCTURE_PLAN.md
-4. app/bootstrap/src/bootstrap.cpp
+4. app/modules/src/module_manager.cpp
 5. app/modules/remote_input/remote_input_module.cpp
 6. app/modules/chassis/chassis_module.cpp
 

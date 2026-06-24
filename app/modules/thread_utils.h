@@ -2,12 +2,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RM_TEST_APP_BOOTSTRAP_THREAD_UTILS_H_
-#define RM_TEST_APP_BOOTSTRAP_THREAD_UTILS_H_
+#ifndef RM_TEST_APP_MODULES_THREAD_UTILS_H_
+#define RM_TEST_APP_MODULES_THREAD_UTILS_H_
 
 #include <zephyr/kernel.h>
 
-namespace rm_test::app::bootstrap {
+namespace rm_test::app::modules {
 
 template <typename T, void (T::*ThreadMain)()>
 inline k_tid_t StartMemberThread(struct k_thread *thread,
@@ -44,6 +44,6 @@ inline k_tid_t StartMemberThread(struct k_thread *thread,
 	return tid;
 }
 
-}  // namespace rm_test::app::bootstrap
+}  // namespace rm_test::app::modules
 
-#endif /* RM_TEST_APP_BOOTSTRAP_THREAD_UTILS_H_ */
+#endif /* RM_TEST_APP_MODULES_THREAD_UTILS_H_ */

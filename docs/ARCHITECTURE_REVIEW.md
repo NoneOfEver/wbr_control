@@ -46,8 +46,8 @@
 旧工程里 `system_startup` 的职责，在 Zephyr 下应拆成四块：
 
 - 板级和外设初始化：交给 `boards/`、DTS、Kconfig、Zephyr 驱动初始化
-- 应用启动编排：交给 `app/bootstrap/bootstrap.*`
-- 模块注册与拉起：交给 `app/bootstrap/module_manager.*`
+- 应用启动编排：交给 `src/main.cpp`
+- 模块注册与拉起：交给 `app/modules/module_manager.*`
 - 数据分发：交给 `platform/drivers/communication/*` + `app/channels/*`
 
 也就是说，Zephyr 下不应再保留一个统一的“全局启动任务”去做所有事情。
@@ -55,8 +55,8 @@
 更推荐的流程是：
 
 1. Zephyr 完成板级、驱动和设备初始化
-2. `main.cpp` 进入 `bootstrap`
-3. `bootstrap` 初始化 `zbus` 接入层和传输适配层
+2. `main.cpp` 初始化 `zbus` 接入层和传输适配层
+3. `main.cpp` 调用 `module_manager`
 4. `module_manager` 创建并拉起各个模块线程
 5. 底层通信适配层把原始事件发布到 `zbus` channel
 6. 各模块在线程上下文中订阅并处理自己关心的 channel
@@ -69,17 +69,15 @@
 
 - 每个模块自己持有自己的状态
 - 模块依赖通过 channel/话题显式表达
-- 模块启动由 `module_manager` 统一编排
+- 模块启动由 `main.cpp` 按 Kconfig 条件直接编排
 - 输入和输出都通过话题流动，而不是经由聚合对象转发
 
 这会让依赖关系从“对象持有关系”变成“channel 订阅关系”，更接近你想要的分布式模型。
 
 在代码组织上，建议进一步落实为：
 
-- `Module` 抽象基类定义统一生命周期接口
 - 每个功能模块实现自己的 C++ 类
-- `ModuleManager` 负责注册、初始化、启动
-- `Bootstrap` 只负责顶层编排，不承担业务逻辑
+- `main.cpp` 负责按顺序初始化、启动模块，不承担模块内部业务逻辑
 
 ### 3. `gimbal_pwm` 的替代方式
 
@@ -129,7 +127,7 @@ applications/rm_test/
     main.cpp
   app/
     bootstrap/
-      include/rm_test/app/bootstrap/
+      include/rm_test/app/modules/
         bootstrap.h
         module.h
         module_manager.h
@@ -201,7 +199,7 @@ applications/rm_test/
 
 旧工程里的应用层要拆成两部分：
 
-- `app/bootstrap/`
+- `app/modules/`
 - `app/modules/`
 
 对应关系建议如下：
@@ -260,7 +258,7 @@ applications/rm_test/
 
 补充说明：
 
-- 当前默认构建只接入了 `main/app_main/bootstrap/module_manager/zbus/board_identity`
+- 当前默认构建只接入了 `main/module_manager/zbus/board_identity`
   这条最小主干
 - `app/modules/*`、`app/protocols/*`、`platform/drivers/*` 目前仍以迁移骨架为主
 - 将应用入口和核心调度骨架切换到 C++ 形态
@@ -270,7 +268,7 @@ applications/rm_test/
 
 为了风险最小，建议后续按这个顺序继续收敛：
 
-1. 先把 `app/bootstrap/` 的 C++ 生命周期接口定型
+1. 先把 `app/modules/` 的 C++ 生命周期接口定型
 2. 再把 `app/channels/` 的基础接口定型
 3. 再把 `app/debug/` 与 `platform/storage/` 的接入边界定型
 4. 再定 `remote_input_module`、`referee_module` 这类输入模块的话题输出

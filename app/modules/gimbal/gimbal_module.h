@@ -5,17 +5,16 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/bootstrap/module.h>
 #include <app/channels/gimbal_command_channel.h>
 #include <app/channels/gimbal_state_channel.h>
 
 namespace rm_test::app::modules::gimbal {
 
-class GimbalModule : public bootstrap::Module {
+class GimbalModule {
 public:
-	const char *Name() const override { return "gimbal"; }
-	int Initialize() override;
-	int Start() override;
+	const char *Name() const { return "gimbal"; }
+	int Initialize();
+	int Start();
 
 	void SetYawAngle(float degrees);
 	void SetPitchAngle(float degrees);

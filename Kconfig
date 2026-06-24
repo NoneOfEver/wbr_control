@@ -18,19 +18,19 @@ config RM_TEST_MODULE_CHASSIS
 
 config RM_TEST_MODULE_ARM
 	bool "Enable arm module"
-	default y
+	default n
 	help
 	  Enable registering and starting the arm module.
 
 config RM_TEST_MODULE_GIMBAL
 	bool "Enable gimbal module"
-	default y
+	default n
 	help
 	  Enable registering and starting the gimbal module.
 
 config RM_TEST_MODULE_GANTRY
 	bool "Enable gantry module"
-	default y
+	default n
 	help
 	  Enable registering and starting the gantry module.
 
@@ -42,7 +42,7 @@ config RM_TEST_MODULE_REFEREE
 
 config RM_TEST_MODULE_SYS_STATE
 	bool "Enable status indicator module"
-	default y
+	default n
 	depends on GPIO || PWM
 	help
 	  Enable registering and starting the system status indicator module.
@@ -50,14 +50,14 @@ config RM_TEST_MODULE_SYS_STATE
 
 config RM_TEST_SHELL_CHASSIS_TUNING
 	bool "Enable chassis tuning shell commands"
-	default y
+	default n
 	depends on SHELL
 	help
 	  Enable chassis pid get/set/save/load/reset_i shell commands.
 
 config RM_TEST_SHELL_MAVLINK_CONTROL
 	bool "Enable MAVLink shell control command"
-	default y
+	default n
 	depends on SHELL
 	help
 	  Enable `mavlink on/off/status` shell command. When enabled,
@@ -86,7 +86,7 @@ config RM_TEST_RUNTIME_INIT_USB
 
 config RM_TEST_RUNTIME_INIT_LITTLEFS
 	bool "Initialize LittleFS in bootstrap"
-	default y
+	default n
 	depends on FILE_SYSTEM_LITTLEFS
 	help
 	  Enable LittleFS initialization during runtime bootstrap.

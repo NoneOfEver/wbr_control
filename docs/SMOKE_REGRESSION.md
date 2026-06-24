@@ -8,11 +8,10 @@
 ## 覆盖范围
 
 1. 启动链路（静态契约）
-- Bootstrap 仍调用 runtime 初始化
-- Bootstrap 仍调用 ModuleManager::Initialize/Start
+- `main.cpp` 仍直接初始化基础设施
+- `main.cpp` 仍直接初始化并启动各模块
 
 2. 模块注册链路（静态契约）
-- `RegisterApplicationModules` 钩子实现存在
 - remote_input/chassis 仍受 Kconfig 开关控制
 
 3. 调参链路可用性（静态契约）

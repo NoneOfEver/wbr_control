@@ -2,8 +2,8 @@
 
 #include <cmath>
 
-#include "wbr/control/leg_kinematics.h"
-#include "wbr/control/math_utils.h"
+#include "leg_kinematics.h"
+#include "math_utils.h"
 
 namespace wbr::control {
 namespace {

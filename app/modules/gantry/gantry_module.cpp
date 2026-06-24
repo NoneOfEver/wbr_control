@@ -6,7 +6,7 @@
 
 #include <zephyr/sys/printk.h>
 
-#include <app/bootstrap/thread_utils.h>
+#include <app/modules/thread_utils.h>
 #include <app/modules/gantry/gantry_module.h>
 #include <app/protocols/motors/cubemars_motor_protocol.h>
 #include <app/protocols/motors/dji_motor_protocol.h>
@@ -76,7 +76,7 @@ int GantryModule::Start()
 		return 0;
 	}
 
-	bootstrap::StartMemberThread<GantryModule, &GantryModule::RunLoop>(
+	::rm_test::app::modules::StartMemberThread<GantryModule, &GantryModule::RunLoop>(
 		&thread_,
 		g_gantry_module_stack,
 		K_THREAD_STACK_SIZEOF(g_gantry_module_stack),

@@ -11,7 +11,7 @@
 #include <zephyr/sys/printk.h>
 
 #include <app/modules/remote_input/remote_input_module.h>
-#include <app/bootstrap/thread_utils.h>
+#include <app/modules/thread_utils.h>
 #include <app/protocols/remote_input/dr16_protocol.h>
 #include <app/protocols/remote_input/vt03_protocol.h>
 
@@ -41,7 +41,7 @@ int RemoteInputModule::Start()
 		return 0;
 	}
 
-	bootstrap::StartMemberThread<RemoteInputModule, &RemoteInputModule::RunLoop>(
+	::rm_test::app::modules::StartMemberThread<RemoteInputModule, &RemoteInputModule::RunLoop>(
 		&thread_,
 		g_remote_input_module_stack,
 		K_THREAD_STACK_SIZEOF(g_remote_input_module_stack),

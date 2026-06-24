@@ -7,8 +7,8 @@
 
 - 阶段 A：已完成（导览、active/staged 标记、维护约定）。
 - 阶段 B：已完成前三步中的前两步，第三步已完成“语义入口层”子任务。
-  - 已完成：`app/core` 目录迁移到 `app/bootstrap`（源码与主头路径）。
-  - 已完成：核心命名空间迁移到 `rm_test::app::bootstrap`。
+  - 已完成：`app/core` 目录迁移到 `app/modules`（源码与主头路径）。
+  - 已完成：核心命名空间迁移到 `rm_test::app::modules`。
   - 已完成：`app/core` 目录已直接删除（无兼容层）。
   - 已完成：建立 `app/{channels,modules,services,protocols}` 语义目录与 `rm_test/app/*` 稳定头入口。
   - 已完成：active 主链路 include 统一切换到 `rm_test/app/*`。
@@ -29,7 +29,7 @@
 当前目录虽然功能上可用，但存在以下开发体验问题：
 
 1. 入口分散
-- 启动入口在 `src/` 与 `app/src/`，业务入口在 `app/bootstrap/`，新同学难以快速定位。
+- 启动编排已收敛到 `src/main.cpp`，模块生命周期基础设施保留在 `app/modules/`。
 
 2. 语义层次混杂
 - `app/` 下既有领域逻辑（modules/services/protocols/channels），又有历史算法资产和调试资产，边界不够直观。
@@ -62,8 +62,6 @@ applications/rm_test/
 
   app/
     bootstrap/
-      app_main.cpp              # 应用入口编排
-      bootstrap.cpp             # 启动流程（发布状态 -> runtime -> modules）
       module_manager.cpp
       module_registry.cpp
 
@@ -104,7 +102,7 @@ applications/rm_test/
 2. 头文件导出规则
 - 上层代码只能 include：
   - `#include <rm_test/app/...>`（优先，领域层）
-  - `#include <rm_test/app/bootstrap/...>`（启动编排层）
+  - `#include <rm_test/app/modules/...>`（启动编排层）
   - `#include <rm_test/platform/...>`
 - 禁止上层直接 include 源码目录相对路径（例如 `app/modules/...`）。
 
@@ -122,8 +120,6 @@ applications/rm_test/
 
 1. 启动入口
 - `src/main.cpp`
-- `app/bootstrap/app_main.cpp`
-- `app/bootstrap/bootstrap.cpp`
 
 2. 当前主链路
 - 输入：`app/modules/remote_input`
@@ -147,7 +143,7 @@ applications/rm_test/
 
 ### 阶段 B：轻量重命名（少量挪动）
 
-1. 已完成：`app/core` -> `app/bootstrap`，且兼容层已删除。
+1. 已完成：`app/core` -> `app/modules`，且兼容层已删除。
 2. 已完成（语义入口层）：建立 `app/*` 与 `rm_test/app/*` 稳定头入口，并将 active 主链路 include 切换到该入口。
 3. 已完成（物理目录迁移）：`app/channels`、`app/services`、`app/modules`、`app/protocols` 已迁入 `app/*`。
 4. 已完成：CMake source 列表与 include 导出已随物理迁移同步。

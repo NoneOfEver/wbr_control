@@ -53,16 +53,18 @@ rm -rf "$TMP_BUILD_DIR"
 mkdir -p "$TMP_LOG_DIR"
 
 echo "-- [1/5] Static contract checks"
-check_file_contains "$ROOT_DIR/app/bootstrap/src/bootstrap.cpp" "InitializeInfrastructure\\(" "Bootstrap calls runtime infrastructure init"
-check_file_contains "$ROOT_DIR/app/bootstrap/src/bootstrap.cpp" "module_manager_\\.Initialize\\(" "Bootstrap initializes module manager"
-check_file_contains "$ROOT_DIR/app/bootstrap/src/bootstrap.cpp" "module_manager_\\.Start\\(" "Bootstrap starts module manager"
-check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "RegisterApplicationModules\\(" "Application module hook is implemented"
-check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_WBR_CONTROL_MODULE_REMOTE_INPUT" "Remote input module is config-gated"
-check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_WBR_CONTROL_MODULE_CHASSIS" "Chassis module is config-gated"
-check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_WBR_CONTROL_MODULE_ARM" "Arm module is config-gated"
-check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_WBR_CONTROL_MODULE_GIMBAL" "Gimbal module is config-gated"
-check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_WBR_CONTROL_MODULE_GANTRY" "Gantry module is config-gated"
-check_file_contains "$ROOT_DIR/app/modules/modules_registry.cpp" "CONFIG_WBR_CONTROL_MODULE_REFEREE" "Referee module is config-gated"
+check_file_contains "$ROOT_DIR/src/main.cpp" "uart_dispatch::Initialize\\(" "main initializes UART dispatch directly"
+check_file_contains "$ROOT_DIR/src/main.cpp" "can_dispatch::Initialize\\(" "main initializes CAN dispatch directly"
+check_file_contains "$ROOT_DIR/src/main.cpp" "g_remote_input_module\\.Initialize\\(" "main initializes remote input module directly"
+check_file_contains "$ROOT_DIR/src/main.cpp" "g_chassis_module\\.Initialize\\(" "main initializes chassis module directly"
+check_file_contains "$ROOT_DIR/src/main.cpp" "g_remote_input_module\\.Start\\(" "main starts remote input module directly"
+check_file_contains "$ROOT_DIR/src/main.cpp" "g_chassis_module\\.Start\\(" "main starts chassis module directly"
+check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_REMOTE_INPUT" "Remote input module is config-gated"
+check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_CHASSIS" "Chassis module is config-gated"
+check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_ARM" "Arm module is config-gated"
+check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_GIMBAL" "Gimbal module is config-gated"
+check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_GANTRY" "Gantry module is config-gated"
+check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_REFEREE" "Referee module is config-gated"
 check_file_contains "$ROOT_DIR/app/debug/shell/chassis_tuning_shell.cpp" "SHELL_CMD\\(status, NULL, \"Show chassis tuning provider status\"" "Shell exposes chassis pid status command"
 check_file_contains "$ROOT_DIR/app/services/chassis/chassis_tuning_service.h" "bool HasProvider\\(\\)" "Tuning service provides provider state query"
 check_file_contains "$ROOT_DIR/app/modules/arm/arm_module.cpp" "\\[baseline\\]\\[arm\\]" "Arm baseline trace exists"
@@ -82,10 +84,10 @@ fi
 
 echo "-- [3/5] Build CAN-off configuration"
 cat > "$OVERLAY_FILE" <<EOF
-CONFIG_WBR_CONTROL_RUNTIME_INIT_CAN=n
-CONFIG_WBR_CONTROL_MODULE_CHASSIS=n
-CONFIG_WBR_CONTROL_MODULE_ARM=n
-CONFIG_WBR_CONTROL_MODULE_GANTRY=n
+CONFIG_RM_TEST_RUNTIME_INIT_CAN=n
+CONFIG_RM_TEST_MODULE_CHASSIS=n
+CONFIG_RM_TEST_MODULE_ARM=n
+CONFIG_RM_TEST_MODULE_GANTRY=n
 EOF
 
 PYTHON_BIN="${WS_DIR}/.venv/bin/python"
@@ -106,7 +108,7 @@ else
 fi
 
 echo "-- [4/5] Config gate checks"
-if rg -q "^# CONFIG_WBR_CONTROL_RUNTIME_INIT_CAN is not set$|^CONFIG_WBR_CONTROL_RUNTIME_INIT_CAN=n$" "$TMP_BUILD_DIR/zephyr/.config"; then
+if rg -q "^# CONFIG_RM_TEST_RUNTIME_INIT_CAN is not set$|^CONFIG_RM_TEST_RUNTIME_INIT_CAN=n$" "$TMP_BUILD_DIR/zephyr/.config"; then
   pass "CAN runtime init is disabled in CAN-off config"
 else
   fail "CAN runtime init disable flag missing in $TMP_BUILD_DIR/zephyr/.config"

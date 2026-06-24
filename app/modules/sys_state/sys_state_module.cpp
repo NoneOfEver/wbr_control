@@ -5,7 +5,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/sys/printk.h>
 
-#include <app/bootstrap/thread_utils.h>
+#include <app/modules/thread_utils.h>
 #include <app/modules/sys_state/sys_state_module.h>
 
 namespace {
@@ -155,7 +155,7 @@ int SysStateModule::Start()
 		return 0;
 	}
 
-	k_tid_t tid = bootstrap::StartMemberThread<SysStateModule, &SysStateModule::RunLoop>(
+	k_tid_t tid = ::rm_test::app::modules::StartMemberThread<SysStateModule, &SysStateModule::RunLoop>(
 		&thread_,
 		g_sys_state_module_stack,
 		K_THREAD_STACK_SIZEOF(g_sys_state_module_stack),

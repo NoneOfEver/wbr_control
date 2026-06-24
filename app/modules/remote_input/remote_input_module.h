@@ -9,7 +9,6 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/bootstrap/module.h>
 #include <app/channels/arm_command_channel.h>
 #include <app/channels/chassis_command_channel.h>
 #include <app/channels/gantry_command_channel.h>
@@ -19,11 +18,11 @@
 
 namespace rm_test::app::modules::remote_input {
 
-class RemoteInputModule : public bootstrap::Module {
+class RemoteInputModule {
 public:
-	const char *Name() const override { return "remote_input"; }
-	int Initialize() override;
-	int Start() override;
+	const char *Name() const { return "remote_input"; }
+	int Initialize();
+	int Start();
 
 private:
 	static constexpr float kChassisSpeedScale = 20.0f;

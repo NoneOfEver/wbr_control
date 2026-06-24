@@ -7,7 +7,6 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/bootstrap/module.h>
 #include <app/channels/can_raw_frame_queue.h>
 #include <app/algorithms/control/alg_pid.h>
 #include <app/channels/chassis_command_channel.h>
@@ -17,12 +16,11 @@
 
 namespace rm_test::app::modules::chassis {
 
-class ChassisModule : public bootstrap::Module,
-			  public rm_test::app::services::chassis_tuning::SpeedPidTuningProvider {
+class ChassisModule : public rm_test::app::services::chassis_tuning::SpeedPidTuningProvider {
 public:
-	const char *Name() const override { return "chassis"; }
-	int Initialize() override;
-	int Start() override;
+	const char *Name() const { return "chassis"; }
+	int Initialize();
+	int Start();
 
 	int SetSpeedPidTuning(float kp, float ki, float kd, float i_limit, float out_limit);
 	int GetSpeedPidTuning(float *kp, float *ki, float *kd, float *i_limit, float *out_limit);

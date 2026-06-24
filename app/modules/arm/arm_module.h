@@ -6,7 +6,6 @@
 #include <zephyr/kernel.h>
 
 #include <app/algorithms/control/alg_pid.h>
-#include <app/bootstrap/module.h>
 #include <app/channels/arm_command_channel.h>
 #include <app/channels/can_raw_frame_queue.h>
 #include <app/channels/motor_feedback_channel.h>
@@ -15,11 +14,11 @@
 
 namespace rm_test::app::modules::arm {
 
-class ArmModule : public bootstrap::Module {
+class ArmModule {
 public:
-	const char *Name() const override { return "arm"; }
-	int Initialize() override;
-	int Start() override;
+	const char *Name() const { return "arm"; }
+	int Initialize();
+	int Start();
 
 	void ControlClaw(float virtual_angle);
 	void ControlElbowPitchJoint(float virtual_angle);

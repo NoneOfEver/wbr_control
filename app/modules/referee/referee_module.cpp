@@ -2,7 +2,7 @@
 
 #include <zephyr/sys/printk.h>
 
-#include <app/bootstrap/thread_utils.h>
+#include <app/modules/thread_utils.h>
 #include <app/modules/referee/referee_module.h>
 #include <app/channels/uart_raw_frame_queue.h>
 #include <platform/drivers/devices/system/referee_client.h>
@@ -28,7 +28,7 @@ int RefereeModule::Start()
 		return 0;
 	}
 
-	bootstrap::StartMemberThread<RefereeModule, &RefereeModule::RunLoop>(
+	::rm_test::app::modules::StartMemberThread<RefereeModule, &RefereeModule::RunLoop>(
 		&thread_,
 		g_referee_module_stack,
 		K_THREAD_STACK_SIZEOF(g_referee_module_stack),

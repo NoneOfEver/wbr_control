@@ -5,16 +5,15 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/bootstrap/module.h>
 #include <app/channels/referee_state_channel.h>
 
 namespace rm_test::app::modules::referee {
 
-class RefereeModule : public bootstrap::Module {
+class RefereeModule {
 public:
-	const char *Name() const override { return "referee"; }
-	int Initialize() override;
-	int Start() override;
+	const char *Name() const { return "referee"; }
+	int Initialize();
+	int Start();
 
 private:
 	void RunLoop();

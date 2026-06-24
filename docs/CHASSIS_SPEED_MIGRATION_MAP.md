@@ -76,7 +76,7 @@
 1. 定义 chassis_command_topic 和 chassis_state_topic 实体结构。
 2. 扩展 zbus channel，打通发布/订阅接口。
 3. 将 chassis_module 从占位改为真实线程实现。
-4. ModuleManager 注册 chassis_module。
+4. main 按 Kconfig 条件直接拉起 chassis_module。
 5. CMake 接入 chassis_module 源文件。
 6. 添加离线逆解一致性测试（输入向量 -> 四轮目标速度）。
 

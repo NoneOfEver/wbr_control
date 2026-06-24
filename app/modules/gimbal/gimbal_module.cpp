@@ -5,7 +5,7 @@
 
 #include <zephyr/sys/printk.h>
 
-#include <app/bootstrap/thread_utils.h>
+#include <app/modules/thread_utils.h>
 #include <app/modules/gimbal/gimbal_module.h>
 #include <platform/drivers/devices/actuators/serial_servo.h>
 
@@ -70,7 +70,7 @@ int GimbalModule::Start()
 		return 0;
 	}
 
-	bootstrap::StartMemberThread<GimbalModule, &GimbalModule::RunLoop>(
+	::rm_test::app::modules::StartMemberThread<GimbalModule, &GimbalModule::RunLoop>(
 		&thread_,
 		g_gimbal_module_stack,
 		K_THREAD_STACK_SIZEOF(g_gimbal_module_stack),

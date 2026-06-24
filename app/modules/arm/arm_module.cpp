@@ -6,7 +6,7 @@
 
 #include <zephyr/sys/printk.h>
 
-#include <app/bootstrap/thread_utils.h>
+#include <app/modules/thread_utils.h>
 #include <app/modules/arm/arm_module.h>
 #include <app/protocols/motors/dm_motor_protocol.h>
 #include <app/protocols/motors/dji_motor_protocol.h>
@@ -113,7 +113,7 @@ int ArmModule::Start()
 		return 0;
 	}
 
-	bootstrap::StartMemberThread<ArmModule, &ArmModule::RunLoop>(&thread_,
+	::rm_test::app::modules::StartMemberThread<ArmModule, &ArmModule::RunLoop>(&thread_,
 							     g_arm_module_stack,
 							     K_THREAD_STACK_SIZEOF(g_arm_module_stack),
 							     this,
