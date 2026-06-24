@@ -73,3 +73,27 @@ west build -p always -b hpm6e00evk_v2 -s .
 # 烧录
 west flash
 ```
+
+### 常见问题
+
+1) 找不到 Zephyr SDK
+
+症状：配置阶段提示缺少 Zephyr SDK。
+
+解决：指定 SDK 路径后再构建（根据实际安装路径调整）。
+
+```bash
+export ZEPHYR_TOOLCHAIN_VARIANT=zephyr
+export ZEPHYR_SDK_INSTALL_DIR=/path/to/zephyr-sdk-0.16.5
+west build -p always -b hpm6750evk2 -s wbr_control -d wbr_control/build
+```
+
+2) 缺少 pyelftools
+
+症状：生成 kobject/driver 校验文件时报 `ModuleNotFoundError: No module named 'elftools'`。
+
+解决：在当前虚拟环境中安装依赖。
+
+```bash
+python -m pip install pyelftools
+```

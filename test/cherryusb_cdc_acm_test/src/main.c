@@ -1,0 +1,26 @@
+/*
+ * Copyright (c) 2025 HPMicro
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+#include <stdint.h>
+#include <stdio.h>
+
+#include <zephyr/devicetree.h>
+#include <zephyr/kernel.h>
+
+extern void cdc_acm_init(uint8_t busid, uint32_t reg_base);
+
+int main(void)
+{
+	uint32_t usb_base = DT_REG_ADDR(DT_NODELABEL(cherryusb_usb0));
+
+	printf("cherryusb cdc_acm test booted.\n");
+
+	cdc_acm_init(0, usb_base);
+
+	while (true) {
+		k_sleep(K_SECONDS(1));
+	}
+}
