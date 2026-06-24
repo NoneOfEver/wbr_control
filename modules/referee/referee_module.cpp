@@ -2,9 +2,9 @@
 
 #include <zephyr/sys/printk.h>
 
-#include <app/modules/thread_utils.h>
-#include <app/modules/referee/referee_module.h>
-#include <app/channels/uart_raw_frame_queue.h>
+#include <modules/thread_utils.h>
+#include <modules/referee/referee_module.h>
+#include <channels/uart_raw_frame_queue.h>
 #include <platform/drivers/devices/system/referee_client.h>
 
 namespace {
@@ -13,13 +13,13 @@ K_THREAD_STACK_DEFINE(g_referee_module_stack, 1024);
 
 }  // namespace
 
-namespace rm_test::app::modules::referee {
+namespace modules::referee {
 
 int RefereeModule::Initialize()
 {
 	started_ = false;
 	sequence_ = 0U;
-	return rm_test::platform::drivers::devices::system::referee_client::Initialize();
+	return platform::drivers::devices::system::referee_client::Initialize();
 }
 
 int RefereeModule::Start()
@@ -28,7 +28,7 @@ int RefereeModule::Start()
 		return 0;
 	}
 
-	::rm_test::app::modules::StartMemberThread<RefereeModule, &RefereeModule::RunLoop>(
+	::modules::StartMemberThread<RefereeModule, &RefereeModule::RunLoop>(
 		&thread_,
 		g_referee_module_stack,
 		K_THREAD_STACK_SIZEOF(g_referee_module_stack),
@@ -44,11 +44,11 @@ void RefereeModule::RunLoop()
 {
 	printk("referee module started\n");
 
-	rm_test::app::channels::RefereeStateMessage state = {};
+	channels::RefereeStateMessage state = {};
 	while (true) {
 		DecodeUartFramesInQueue();
 
-		if (rm_test::platform::drivers::devices::system::referee_client::GetLatestState(&state) == 0) {
+		if (platform::drivers::devices::system::referee_client::GetLatestState(&state) == 0) {
 			state.sequence = ++sequence_;
 			(void)zbus_chan_pub(&rm_test_referee_state_chan, &state, K_NO_WAIT);
 		}
@@ -59,15 +59,15 @@ void RefereeModule::RunLoop()
 void RefereeModule::DecodeUartFramesInQueue()
 {
 	while (true) {
-		rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage frame = {};
-		if (rm_test::app::channels::uart_raw_frame_queue::DequeueForReferee(&frame) != 0) {
+		channels::uart_raw_frame_queue::UartRawFrameMessage frame = {};
+		if (channels::uart_raw_frame_queue::DequeueForReferee(&frame) != 0) {
 			break;
 		}
 
-		(void)rm_test::platform::drivers::devices::system::referee_client::FeedBytes(
+		(void)platform::drivers::devices::system::referee_client::FeedBytes(
 			frame.data,
 			frame.len);
 	}
 }
 
-}  // namespace rm_test::app::modules::referee
+}  // namespace modules::referee

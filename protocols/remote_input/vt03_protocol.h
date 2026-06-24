@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-namespace rm_test::app::protocols::remote_input::vt03 {
+namespace protocols::remote_input::vt03 {
 
 constexpr size_t kRemoteFrameLength = 21;
 constexpr size_t kCustomFrameLength = 39;
@@ -31,6 +31,6 @@ struct Vt03CustomFrame {
 bool DecodeRemoteFrame(const uint8_t *data, size_t len, Vt03Frame *out);
 bool DecodeCustomFrame(const uint8_t *data, size_t len, Vt03CustomFrame *out);
 
-}  // namespace rm_test::app::protocols::remote_input::vt03
+}  // namespace protocols::remote_input::vt03
 
 #endif /* RM_TEST_APP_PROTOCOLS_REMOTE_INPUT_VT03_PROTOCOL_H_ */

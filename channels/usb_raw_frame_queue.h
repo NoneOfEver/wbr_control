@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-namespace rm_test::app::channels::usb_raw_frame_queue {
+namespace channels::usb_raw_frame_queue {
 
 constexpr size_t kUsbRawChunkSize = 512U;
 
@@ -18,6 +18,6 @@ struct UsbRawFrameMessage {
 int EnqueueForCdcAcm(const UsbRawFrameMessage *frame);
 int DequeueForCdcAcm(UsbRawFrameMessage *frame, int32_t timeout_ms);
 
-}  // namespace rm_test::app::channels::usb_raw_frame_queue
+}  // namespace channels::usb_raw_frame_queue
 
 #endif /* RM_TEST_APP_CHANNELS_USB_RAW_FRAME_QUEUE_H_ */

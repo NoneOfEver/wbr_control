@@ -47,8 +47,8 @@
 
 - 板级和外设初始化：交给 `boards/`、DTS、Kconfig、Zephyr 驱动初始化
 - 应用启动编排：交给 `src/main.cpp`
-- 模块注册与拉起：交给 `app/modules/module_manager.*`
-- 数据分发：交给 `platform/drivers/communication/*` + `app/channels/*`
+- 模块注册与拉起：交给 `modules/module_manager.*`
+- 数据分发：交给 `platform/drivers/communication/*` + `channels/*`
 
 也就是说，Zephyr 下不应再保留一个统一的“全局启动任务”去做所有事情。
 
@@ -102,7 +102,7 @@
 
 除此之外，项目还需要两个与业务正交的支撑层：
 
-- `app/debug/`：Zephyr shell、tracing、运行时诊断入口
+- `debug/`：Zephyr shell、tracing、运行时诊断入口
 - `platform/storage/`：文件系统、参数文件、日志文件的持久化接入
 
 考虑到项目主体是 C++，建议模块层采用“C++ 对象 + Zephyr 内核对象”的方式实现：
@@ -127,7 +127,7 @@ applications/rm_test/
     main.cpp
   app/
     bootstrap/
-      include/rm_test/app/modules/
+      include/rm_test/modules/
         bootstrap.h
         module.h
         module_manager.h
@@ -191,7 +191,7 @@ applications/rm_test/
 
 继续保留在：
 
-- `app/algorithms/`
+- `algorithms/`
 
 这一层本身是合理的，不需要大改。
 
@@ -199,15 +199,15 @@ applications/rm_test/
 
 旧工程里的应用层要拆成两部分：
 
-- `app/modules/`
-- `app/modules/`
+- `modules/`
+- `modules/`
 
 对应关系建议如下：
 
-- `app_chassis.*` -> `app/modules/chassis/chassis_module.*`
-- `app_gimbal.*` -> `app/modules/gimbal/gimbal_module.*`
-- `app_gantry.*` -> `app/modules/gantry/gantry_module.*`
-- `app_arm.*` -> `app/modules/arm/arm_module.*`
+- `app_chassis.*` -> `modules/chassis/chassis_module.*`
+- `app_gimbal.*` -> `modules/gimbal/gimbal_module.*`
+- `app_gantry.*` -> `modules/gantry/gantry_module.*`
+- `app_arm.*` -> `modules/arm/arm_module.*`
 - `system_startup.*` -> 被 `bootstrap.*`、`module_manager.*`、`communication/*` 共同替代
 
 ### `Communication/`
@@ -215,7 +215,7 @@ applications/rm_test/
 建议拆成两层：
 
 - `platform/drivers/communication/`：总线事件接入、底层分发
-- `app/protocols/`：MCU/PC 等链路协议
+- `protocols/`：MCU/PC 等链路协议
 
 也就是：
 
@@ -249,28 +249,28 @@ applications/rm_test/
 
 这次已经做的目录收敛包括：
 
-- 删除 `app/features/` 下和 `app/modules/` 语义重复的旧占位文件
-- 保留并强化 `app/modules/` 作为主功能目录
+- 删除 `app/features/` 下和 `modules/` 语义重复的旧占位文件
+- 保留并强化 `modules/` 作为主功能目录
 - 放弃自建 `app/pubsub/`，改为使用官方 `zbus`
-- 保留 `app/channels/` 作为消息类型定义层
+- 保留 `channels/` 作为消息类型定义层
 - 将设备占位命名从旧 `dvc_*` 风格切到角色命名
-- 维持 `app/protocols/pc_link` 作为链路层命名
+- 维持 `protocols/pc_link` 作为链路层命名
 
 补充说明：
 
 - 当前默认构建只接入了 `main/module_manager/zbus/board_identity`
   这条最小主干
-- `app/modules/*`、`app/protocols/*`、`platform/drivers/*` 目前仍以迁移骨架为主
+- `modules/*`、`protocols/*`、`platform/drivers/*` 目前仍以迁移骨架为主
 - 将应用入口和核心调度骨架切换到 C++ 形态
-- 将调试和存储能力单独纳入 `app/debug/` 与 `platform/storage/`
+- 将调试和存储能力单独纳入 `debug/` 与 `platform/storage/`
 
 ## 建议的下一步修改顺序
 
 为了风险最小，建议后续按这个顺序继续收敛：
 
-1. 先把 `app/modules/` 的 C++ 生命周期接口定型
-2. 再把 `app/channels/` 的基础接口定型
-3. 再把 `app/debug/` 与 `platform/storage/` 的接入边界定型
+1. 先把 `modules/` 的 C++ 生命周期接口定型
+2. 再把 `channels/` 的基础接口定型
+3. 再把 `debug/` 与 `platform/storage/` 的接入边界定型
 4. 再定 `remote_input_module`、`referee_module` 这类输入模块的话题输出
 5. 然后定 `chassis`、`gimbal`、`arm`、`gantry` 的命令与状态话题
 5. 最后再决定每个设备封装和模块之间的边界细节

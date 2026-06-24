@@ -2,10 +2,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <app/channels/chassis_state_channel.h>
+#include <channels/chassis_state_channel.h>
 
 ZBUS_CHAN_DEFINE(rm_test_chassis_state_chan,
-		 rm_test::app::channels::ChassisStateMessage,
+		 channels::ChassisStateMessage,
 		 NULL,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,

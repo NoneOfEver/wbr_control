@@ -5,9 +5,9 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/channels/referee_state_channel.h>
+#include <channels/referee_state_channel.h>
 
-namespace rm_test::app::modules::referee {
+namespace modules::referee {
 
 class RefereeModule {
 public:
@@ -24,6 +24,6 @@ private:
 	uint32_t sequence_ = 0U;
 };
 
-}  // namespace rm_test::app::modules::referee
+}  // namespace modules::referee
 
 #endif /* RM_TEST_APP_MODULES_REFEREE_REFEREE_MODULE_H_ */

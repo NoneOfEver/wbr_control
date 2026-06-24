@@ -8,10 +8,10 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
-#include <app/modules/thread_utils.h>
-#include <app/modules/gantry/gantry_module.h>
-#include <app/protocols/motors/cubemars_motor_protocol.h>
-#include <app/protocols/motors/dji_motor_protocol.h>
+#include <modules/thread_utils.h>
+#include <modules/gantry/gantry_module.h>
+#include <protocols/motors/cubemars_motor_protocol.h>
+#include <protocols/motors/dji_motor_protocol.h>
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
 #include <zephyr/device.h>
@@ -89,7 +89,7 @@ int SendDjiCurrent0x200(LocalCanBus bus, const int16_t current_cmd[4])
 
 	uint8_t frame[8] = {0U};
 	const int encode_rc =
-		rm_test::app::protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
+		protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
 	if (encode_rc != 0) {
 		return encode_rc;
 	}
@@ -106,7 +106,7 @@ float UIntToFloat(uint16_t raw, float min_value, float max_value, uint8_t bits)
 
 }  // namespace
 
-namespace rm_test::app::modules::gantry {
+namespace modules::gantry {
 
 int GantryModule::Initialize()
 {
@@ -153,7 +153,7 @@ int GantryModule::Start()
 		return 0;
 	}
 
-	::rm_test::app::modules::StartMemberThread<GantryModule, &GantryModule::RunLoop>(
+	::modules::StartMemberThread<GantryModule, &GantryModule::RunLoop>(
 		&thread_,
 		g_gantry_module_stack,
 		K_THREAD_STACK_SIZEOF(g_gantry_module_stack),
@@ -196,13 +196,13 @@ void GantryModule::HandleCommand(const channels::GantryCommandMessage &command)
 void GantryModule::SendCubemarsStartupSequence()
 {
 	uint8_t frame[8] = {0U};
-	if (rm_test::app::protocols::motors::cubemars::GetSaveZeroFrame(frame) == 0) {
+	if (protocols::motors::cubemars::GetSaveZeroFrame(frame) == 0) {
 		(void)SendCanStdFrame(LocalCanBus::kCan2, kCubemarsCanId, frame, 8U);
 		(void)SendCanStdFrame(LocalCanBus::kCan1, kCubemarsCanId, frame, 8U);
 		k_sleep(K_MSEC(200));
 	}
 
-	if (rm_test::app::protocols::motors::cubemars::GetEnterFrame(frame) == 0) {
+	if (protocols::motors::cubemars::GetEnterFrame(frame) == 0) {
 		(void)SendCanStdFrame(LocalCanBus::kCan2, kCubemarsCanId, frame, 8U);
 		(void)SendCanStdFrame(LocalCanBus::kCan1, kCubemarsCanId, frame, 8U);
 		k_sleep(K_MSEC(200));
@@ -214,14 +214,14 @@ void GantryModule::DecodeCanFramesInQueue()
 	constexpr int kMaxFramesPerTick = 8;
 	int frames_processed = 0;
 	while (frames_processed < kMaxFramesPerTick) {
-		rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
-		if (rm_test::app::channels::can_raw_frame_queue::DequeueForGantry(&frame) != 0) {
+		channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
+		if (channels::can_raw_frame_queue::DequeueForGantry(&frame) != 0) {
 			break;
 		}
 
 		if ((frame.bus == 2U) && ((frame.can_id == kDjiXLeftCanId) || (frame.can_id == kDjiXRightCanId))) {
-			rm_test::app::protocols::motors::dji::DjiMotorFeedback dji = {};
-			if (rm_test::app::protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &dji) == 0) {
+			protocols::motors::dji::DjiMotorFeedback dji = {};
+			if (protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &dji) == 0) {
 				if (frame.can_id == kDjiXLeftCanId) {
 					x_left_feedback_.omega = dji.omega;
 					x_left_feedback_.valid = true;
@@ -234,8 +234,8 @@ void GantryModule::DecodeCanFramesInQueue()
 		}
 
 		if ((frame.bus == 3U) && (frame.can_id == kDjiYCanId)) {
-			rm_test::app::protocols::motors::dji::DjiMotorFeedback dji = {};
-			if (rm_test::app::protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &dji) == 0) {
+			protocols::motors::dji::DjiMotorFeedback dji = {};
+			if (protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &dji) == 0) {
 				y_feedback_.omega = dji.omega;
 				y_feedback_.valid = true;
 			}
@@ -243,8 +243,8 @@ void GantryModule::DecodeCanFramesInQueue()
 		}
 
 		if (frame.can_id == kCubemarsCanId) {
-			rm_test::app::protocols::motors::cubemars::CubemarsFeedback z = {};
-			if (rm_test::app::protocols::motors::cubemars::DecodeFeedback(frame.data, frame.dlc, &z) != 0) {
+			protocols::motors::cubemars::CubemarsFeedback z = {};
+			if (protocols::motors::cubemars::DecodeFeedback(frame.data, frame.dlc, &z) != 0) {
 				continue;
 			}
 
@@ -306,7 +306,7 @@ void GantryModule::ApplyControlAndSend()
 						       kZAxisSpeedLimit)
 					  : 0.0f;
 
-	rm_test::app::protocols::motors::cubemars::CubemarsMitRange z_range = {
+	protocols::motors::cubemars::CubemarsMitRange z_range = {
 		.p_min = -12.5f,
 		.p_max = 12.5f,
 		.v_min = -50.0f,
@@ -319,14 +319,14 @@ void GantryModule::ApplyControlAndSend()
 		.t_max = 18.0f,
 	};
 
-	rm_test::app::protocols::motors::cubemars::CubemarsMitCommand left_cmd = {
+	protocols::motors::cubemars::CubemarsMitCommand left_cmd = {
 		.position = 0.0f,
 		.velocity = z_left_omega,
 		.kp = 0.0f,
 		.kd = kCubemarsZKd,
 		.torque = 0.0f,
 	};
-	rm_test::app::protocols::motors::cubemars::CubemarsMitCommand right_cmd = {
+	protocols::motors::cubemars::CubemarsMitCommand right_cmd = {
 		.position = 0.0f,
 		.velocity = z_right_omega,
 		.kp = 0.0f,
@@ -335,10 +335,10 @@ void GantryModule::ApplyControlAndSend()
 	};
 
 	uint8_t z_frame[8] = {0U};
-	if (rm_test::app::protocols::motors::cubemars::PackMitCommand(&left_cmd, &z_range, z_frame) == 0) {
+	if (protocols::motors::cubemars::PackMitCommand(&left_cmd, &z_range, z_frame) == 0) {
 		(void)SendCanStdFrame(LocalCanBus::kCan2, kCubemarsCanId, z_frame, 8U);
 	}
-	if (rm_test::app::protocols::motors::cubemars::PackMitCommand(&right_cmd, &z_range, z_frame) == 0) {
+	if (protocols::motors::cubemars::PackMitCommand(&right_cmd, &z_range, z_frame) == 0) {
 		(void)SendCanStdFrame(LocalCanBus::kCan1, kCubemarsCanId, z_frame, 8U);
 	}
 }
@@ -397,4 +397,4 @@ void GantryModule::RunLoop()
 	}
 }
 
-}  // namespace rm_test::app::modules::gantry
+}  // namespace modules::gantry

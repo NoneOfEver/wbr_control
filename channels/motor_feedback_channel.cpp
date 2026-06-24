@@ -2,10 +2,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <app/channels/motor_feedback_channel.h>
+#include <channels/motor_feedback_channel.h>
 
 ZBUS_CHAN_DEFINE(rm_test_motor_feedback_chan,
-		 rm_test::app::channels::MotorFeedbackMessage,
+		 channels::MotorFeedbackMessage,
 		 NULL,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,

@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#include <app/channels/can_raw_frame_queue.h>
+#include <channels/can_raw_frame_queue.h>
 
 #include "can_dispatch.h"
 
@@ -69,7 +69,7 @@ void RouteCanFrameToModuleQueues(uint8_t bus, const struct can_frame *rx_frame)
 		return;
 	}
 
-	rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
+	channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
 	frame.bus = bus;
 	frame.can_id = static_cast<uint16_t>(rx_frame->id);
 	frame.dlc = rx_frame->dlc;
@@ -81,10 +81,10 @@ void RouteCanFrameToModuleQueues(uint8_t bus, const struct can_frame *rx_frame)
 
 	if (bus == 1U) {
 		if ((frame.can_id >= kDjiId1) && (frame.can_id <= kDjiId4)) {
-			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForChassis(&frame);
+			(void)channels::can_raw_frame_queue::EnqueueForChassis(&frame);
 		}
 		if (frame.can_id == kCubemarsBroadcastId) {
-			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForGantry(&frame);
+			(void)channels::can_raw_frame_queue::EnqueueForGantry(&frame);
 		}
 		return;
 	}
@@ -92,7 +92,7 @@ void RouteCanFrameToModuleQueues(uint8_t bus, const struct can_frame *rx_frame)
 	if (bus == 2U) {
 		if ((frame.can_id == kCubemarsBroadcastId) || (frame.can_id == 0x201U) ||
 		    (frame.can_id == 0x202U)) {
-			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForGantry(&frame);
+			(void)channels::can_raw_frame_queue::EnqueueForGantry(&frame);
 		}
 		return;
 	}
@@ -100,10 +100,10 @@ void RouteCanFrameToModuleQueues(uint8_t bus, const struct can_frame *rx_frame)
 	if (bus == 3U) {
 		if ((frame.can_id == kDmId1) || (frame.can_id == kDmId2) || (frame.can_id == kDmId3) ||
 		    (frame.can_id == 0x202U) || (frame.can_id == 0x203U)) {
-			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForArm(&frame);
+			(void)channels::can_raw_frame_queue::EnqueueForArm(&frame);
 		}
 		if (frame.can_id == 0x201U) {
-			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForGantry(&frame);
+			(void)channels::can_raw_frame_queue::EnqueueForGantry(&frame);
 		}
 	}
 }
@@ -156,7 +156,7 @@ int AddDefaultFilters(const struct device *dev, uint8_t bus)
 
 }  // namespace
 
-namespace rm_test::platform::drivers::communication::can_dispatch {
+namespace platform::drivers::communication::can_dispatch {
 
 int Initialize()
 {
@@ -192,4 +192,4 @@ int Initialize()
 	return 0;
 }
 
-}  // namespace rm_test::platform::drivers::communication::can_dispatch
+}  // namespace platform::drivers::communication::can_dispatch

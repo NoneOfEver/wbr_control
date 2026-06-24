@@ -6,9 +6,9 @@
 #include <stdint.h>
 #include <zephyr/zbus/zbus.h>
 
-#include <app/channels/chassis_command_channel.h>
+#include <channels/chassis_command_channel.h>
 
-namespace rm_test::app::channels {
+namespace channels {
 
 struct ArmCommandMessage {
 	float claw_delta;
@@ -21,7 +21,7 @@ struct ArmCommandMessage {
 	uint32_t sequence;
 };
 
-}  // namespace rm_test::app::channels
+}  // namespace channels
 
 ZBUS_CHAN_DECLARE(rm_test_arm_command_chan);
 

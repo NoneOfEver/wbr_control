@@ -15,10 +15,10 @@
 
 1. 行为一致性优先，重构不改变核心控制意图。
 2. 在 rm_test 当前分层架构下完成能力落地：
-- app/modules
-- app/services
-- app/channels
-- app/protocols
+- modules
+- services
+- channels
+- protocols
 3. 形成可持续验证闭环（构建 + smoke + 回放/实机）。
 
 ## 3. 当前已完成（截至今天）
@@ -33,9 +33,9 @@
 
 ### 3.2 目录与分层已完成收敛
 
-- app/core -> app/modules 已完成并删除兼容层。
+- core -> modules 已完成并删除兼容层。
 - channels/services/modules/protocols 实体已收敛到 app 顶层同名目录。
-- staged 模块已集中到 app/modules/staging。
+- staged 模块已集中到 modules/staging。
 - 平台 legacy 分区已建立：platform/legacy。
 
 ### 3.3 最小回归能力已建立

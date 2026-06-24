@@ -7,10 +7,10 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
-#include <app/modules/thread_utils.h>
-#include <app/modules/arm/arm_module.h>
-#include <app/protocols/motors/dm_motor_protocol.h>
-#include <app/protocols/motors/dji_motor_protocol.h>
+#include <modules/thread_utils.h>
+#include <modules/arm/arm_module.h>
+#include <protocols/motors/dm_motor_protocol.h>
+#include <protocols/motors/dji_motor_protocol.h>
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
 #include <zephyr/device.h>
@@ -70,7 +70,7 @@ int SendDjiCurrent0x200OnCan3(const int16_t current_cmd[4])
 
 	uint8_t frame[8] = {0U};
 	const int encode_rc =
-		rm_test::app::protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
+		protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
 	if (encode_rc != 0) {
 		return encode_rc;
 	}
@@ -80,7 +80,7 @@ int SendDjiCurrent0x200OnCan3(const int16_t current_cmd[4])
 
 int SendDmMitCommand(uint16_t can_id, float position, float kp, float kd)
 {
-	rm_test::app::protocols::motors::dm::DmMitRange range = {
+	protocols::motors::dm::DmMitRange range = {
 		.p_min = -12.5f,
 		.p_max = 12.5f,
 		.v_min = -10.0f,
@@ -93,7 +93,7 @@ int SendDmMitCommand(uint16_t can_id, float position, float kp, float kd)
 		.t_max = 29.0f,
 	};
 
-	rm_test::app::protocols::motors::dm::DmMitCommand cmd = {
+	protocols::motors::dm::DmMitCommand cmd = {
 		.position = position,
 		.velocity = 0.0f,
 		.kp = kp,
@@ -102,7 +102,7 @@ int SendDmMitCommand(uint16_t can_id, float position, float kp, float kd)
 	};
 
 	uint8_t frame[8] = {0U};
-	const int pack_rc = rm_test::app::protocols::motors::dm::PackMitCommand(&cmd, &range, frame);
+	const int pack_rc = protocols::motors::dm::PackMitCommand(&cmd, &range, frame);
 	if (pack_rc != 0) {
 		return pack_rc;
 	}
@@ -112,7 +112,7 @@ int SendDmMitCommand(uint16_t can_id, float position, float kp, float kd)
 
 }  // namespace
 
-namespace rm_test::app::modules::arm {
+namespace modules::arm {
 
 int ArmModule::Initialize()
 {
@@ -152,7 +152,7 @@ int ArmModule::Start()
 		return 0;
 	}
 
-	::rm_test::app::modules::StartMemberThread<ArmModule, &ArmModule::RunLoop>(&thread_,
+	::modules::StartMemberThread<ArmModule, &ArmModule::RunLoop>(&thread_,
 							     g_arm_module_stack,
 							     K_THREAD_STACK_SIZEOF(g_arm_module_stack),
 							     this,
@@ -225,10 +225,10 @@ void ArmModule::HandleCommand(const channels::ArmCommandMessage &command)
 
 void ArmModule::SendDmStartupSequence()
 {
-	using rm_test::app::protocols::motors::dm::DmControlCommand;
+	using protocols::motors::dm::DmControlCommand;
 
 	uint8_t cmd_frame[8] = {0U};
-	if (rm_test::app::protocols::motors::dm::GetControlCommandFrame(
+	if (protocols::motors::dm::GetControlCommandFrame(
 		    DmControlCommand::kClearError,
 		    cmd_frame) == 0) {
 		(void)SendDmFrameOnCan3(kDmClawCanId, cmd_frame, 8U);
@@ -237,7 +237,7 @@ void ArmModule::SendDmStartupSequence()
 		k_sleep(K_MSEC(100));
 	}
 
-	if (rm_test::app::protocols::motors::dm::GetControlCommandFrame(
+	if (protocols::motors::dm::GetControlCommandFrame(
 		    DmControlCommand::kEnter,
 		    cmd_frame) == 0) {
 		(void)SendDmFrameOnCan3(kDmClawCanId, cmd_frame, 8U);
@@ -250,8 +250,8 @@ void ArmModule::SendDmStartupSequence()
 void ArmModule::DecodeCanFramesInQueue()
 {
 	while (true) {
-		rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
-		if (rm_test::app::channels::can_raw_frame_queue::DequeueForArm(&frame) != 0) {
+		channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
+		if (channels::can_raw_frame_queue::DequeueForArm(&frame) != 0) {
 			break;
 		}
 
@@ -260,8 +260,8 @@ void ArmModule::DecodeCanFramesInQueue()
 		}
 
 		if ((frame.can_id == kWristMotorCanId[0]) || (frame.can_id == kWristMotorCanId[1])) {
-			rm_test::app::protocols::motors::dji::DjiMotorFeedback decoded = {};
-			if (rm_test::app::protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &decoded) != 0) {
+			protocols::motors::dji::DjiMotorFeedback decoded = {};
+			if (protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &decoded) != 0) {
 				continue;
 			}
 
@@ -282,8 +282,8 @@ void ArmModule::DecodeCanFramesInQueue()
 
 		if ((frame.can_id == kDmClawCanId) || (frame.can_id == kDmElbowYawCanId) ||
 		    (frame.can_id == kDmElbowPitchCanId)) {
-			rm_test::app::protocols::motors::dm::DmMotorFeedback1To4 decoded = {};
-			if (rm_test::app::protocols::motors::dm::DecodeFeedback1To4(
+			protocols::motors::dm::DmMotorFeedback1To4 decoded = {};
+			if (protocols::motors::dm::DecodeFeedback1To4(
 				frame.data,
 				frame.dlc,
 				&decoded) != 0) {
@@ -392,4 +392,4 @@ void ArmModule::RunLoop()
 	}
 }
 
-}  // namespace rm_test::app::modules::arm
+}  // namespace modules::arm

@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <zephyr/zbus/zbus.h>
 
-namespace rm_test::app::channels {
+namespace channels {
 
 enum BootPhase : uint8_t {
 	kBooting = 0,
@@ -21,7 +21,7 @@ struct SystemStatusMessage {
 	uint32_t active_modules;
 };
 
-}  // namespace rm_test::app::channels
+}  // namespace channels
 
 ZBUS_CHAN_DECLARE(rm_test_system_status_chan);
 

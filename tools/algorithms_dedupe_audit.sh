@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-ALG_DIR="$ROOT_DIR/app/algorithms"
+ALG_DIR="$ROOT_DIR/algorithms"
 
 if [[ ! -d "$ALG_DIR" ]]; then
   echo "[FAIL] algorithms directory not found: $ALG_DIR" >&2

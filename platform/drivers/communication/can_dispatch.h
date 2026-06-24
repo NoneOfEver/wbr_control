@@ -5,10 +5,10 @@
 #ifndef RM_TEST_PLATFORM_DRIVERS_COMMUNICATION_CAN_DISPATCH_H_
 #define RM_TEST_PLATFORM_DRIVERS_COMMUNICATION_CAN_DISPATCH_H_
 
-namespace rm_test::platform::drivers::communication::can_dispatch {
+namespace platform::drivers::communication::can_dispatch {
 
 int Initialize();
 
-}  // namespace rm_test::platform::drivers::communication::can_dispatch
+}  // namespace platform::drivers::communication::can_dispatch
 
 #endif /* RM_TEST_PLATFORM_DRIVERS_COMMUNICATION_CAN_DISPATCH_H_ */

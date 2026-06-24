@@ -7,9 +7,9 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/irq.h>
 
-#include <app/protocols/motors/dji_motor_protocol.h>
+#include <protocols/motors/dji_motor_protocol.h>
 
-namespace rm_test::app::protocols::motors::dji {
+namespace protocols::motors::dji {
 
 namespace {
 
@@ -30,7 +30,7 @@ constexpr uint16_t kDjiId2 = 0x202;
 constexpr uint16_t kDjiId3 = 0x203;
 constexpr uint16_t kDjiId4 = 0x204;
 
-rm_test::app::channels::MotorFeedbackMessage g_latest_state[4] = {};
+channels::MotorFeedbackMessage g_latest_state[4] = {};
 bool g_latest_state_valid[4] = {false, false, false, false};
 uint32_t g_feedback_sequence = 0U;
 
@@ -97,7 +97,7 @@ int IngestCanFrame(uint8_t bus, uint16_t can_id, uint8_t dlc, const uint8_t *dat
 		return -EINVAL;
 	}
 
-	rm_test::app::channels::MotorFeedbackMessage state = {};
+	channels::MotorFeedbackMessage state = {};
 	DjiMotorFeedback feedback = {};
 	const int decode_rc = DecodeFeedback(data, dlc, &feedback);
 	if (decode_rc != 0) {
@@ -120,7 +120,7 @@ int IngestCanFrame(uint8_t bus, uint16_t can_id, uint8_t dlc, const uint8_t *dat
 	return 0;
 }
 
-int GetLatestState(uint16_t can_id, rm_test::app::channels::MotorFeedbackMessage *out)
+int GetLatestState(uint16_t can_id, channels::MotorFeedbackMessage *out)
 {
 	if (out == nullptr) {
 		return -EINVAL;
@@ -164,4 +164,4 @@ int WriteCurrentCommandToSlot(uint16_t motor_can_id, int16_t current_cmd, uint8_
 	return WriteBe16ToSlot(current_cmd, slot, frame_payload);
 }
 
-}  // namespace rm_test::app::protocols::motors::dji
+}  // namespace protocols::motors::dji

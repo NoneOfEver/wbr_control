@@ -7,7 +7,7 @@
 
 #include <stddef.h>
 
-namespace rm_test::app::services::chassis_tuning {
+namespace services::chassis_tuning {
 
 class SpeedPidTuningProvider {
 public:
@@ -27,6 +27,6 @@ int SetSpeedPidTuning(float kp, float ki, float kd, float i_limit, float out_lim
 int GetSpeedPidTuning(float *kp, float *ki, float *kd, float *i_limit, float *out_limit);
 int ResetSpeedPidIntegrator();
 
-}  // namespace rm_test::app::services::chassis_tuning
+}  // namespace services::chassis_tuning
 
 #endif /* RM_TEST_APP_SERVICES_CHASSIS_CHASSIS_TUNING_SERVICE_H_ */

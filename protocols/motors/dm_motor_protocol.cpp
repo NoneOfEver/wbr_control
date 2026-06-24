@@ -8,9 +8,9 @@
 
 #include <zephyr/sys/byteorder.h>
 
-#include <app/protocols/motors/dm_motor_protocol.h>
+#include <protocols/motors/dm_motor_protocol.h>
 
-namespace rm_test::app::protocols::motors::dm {
+namespace protocols::motors::dm {
 
 namespace {
 
@@ -112,4 +112,4 @@ int Pack1To4CurrentFrame(uint16_t motor_can_id, int16_t current_ma, uint8_t fram
 	return 0;
 }
 
-}  // namespace rm_test::app::protocols::motors::dm
+}  // namespace protocols::motors::dm

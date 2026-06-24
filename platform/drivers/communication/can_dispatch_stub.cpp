@@ -6,7 +6,7 @@
 
 #include <platform/drivers/communication/can_dispatch.h>
 
-namespace rm_test::platform::drivers::communication::can_dispatch {
+namespace platform::drivers::communication::can_dispatch {
 
 #if !defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) || (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 0)
 
@@ -17,4 +17,4 @@ int Initialize()
 
 #endif
 
-}  // namespace rm_test::platform::drivers::communication::can_dispatch
+}  // namespace platform::drivers::communication::can_dispatch

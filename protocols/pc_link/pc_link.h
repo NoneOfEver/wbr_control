@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-namespace rm_test::app::protocols::pc_link {
+namespace protocols::pc_link {
 
 constexpr uint8_t kFrameSof = 0xa5U;
 
@@ -32,6 +32,6 @@ int EncodeFrame(uint16_t cmd_id,
 
 int DecodeFrame(const uint8_t *frame, size_t frame_len, PcFrame *out);
 
-}  // namespace rm_test::app::protocols::pc_link
+}  // namespace protocols::pc_link
 
 #endif /* RM_TEST_APP_PROTOCOLS_PC_LINK_PC_LINK_H_ */

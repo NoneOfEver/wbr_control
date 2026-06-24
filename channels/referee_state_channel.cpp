@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include <app/channels/referee_state_channel.h>
+#include <channels/referee_state_channel.h>
 
 ZBUS_CHAN_DEFINE(rm_test_referee_state_chan,
-		 rm_test::app::channels::RefereeStateMessage,
+		 channels::RefereeStateMessage,
 		 NULL,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,

@@ -4,27 +4,27 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/channels/uart_raw_frame_queue.h>
+#include <channels/uart_raw_frame_queue.h>
 
 namespace {
 
 constexpr size_t kQueueDepth = 32U;
 
 K_MSGQ_DEFINE(g_remote_input_uart_raw_msgq,
-	     sizeof(rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage),
+	     sizeof(channels::uart_raw_frame_queue::UartRawFrameMessage),
 	     kQueueDepth,
 	     4);
 K_MSGQ_DEFINE(g_referee_uart_raw_msgq,
-	     sizeof(rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage),
+	     sizeof(channels::uart_raw_frame_queue::UartRawFrameMessage),
 	     kQueueDepth,
 	     4);
 K_MSGQ_DEFINE(g_mavlink_uart_raw_msgq,
-	     sizeof(rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage),
+	     sizeof(channels::uart_raw_frame_queue::UartRawFrameMessage),
 	     kQueueDepth,
 	     4);
 
 int Enqueue(struct k_msgq *msgq,
-	    const rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage *frame)
+	    const channels::uart_raw_frame_queue::UartRawFrameMessage *frame)
 {
 	if ((msgq == nullptr) || (frame == nullptr)) {
 		return -EINVAL;
@@ -34,7 +34,7 @@ int Enqueue(struct k_msgq *msgq,
 }
 
 int Dequeue(struct k_msgq *msgq,
-	    rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage *frame)
+	    channels::uart_raw_frame_queue::UartRawFrameMessage *frame)
 {
 	if ((msgq == nullptr) || (frame == nullptr)) {
 		return -EINVAL;
@@ -45,7 +45,7 @@ int Dequeue(struct k_msgq *msgq,
 
 }  // namespace
 
-namespace rm_test::app::channels::uart_raw_frame_queue {
+namespace channels::uart_raw_frame_queue {
 
 int EnqueueForRemoteInput(const UartRawFrameMessage *frame)
 {
@@ -77,4 +77,4 @@ int DequeueForMavlink(UartRawFrameMessage *frame)
 	return Dequeue(&g_mavlink_uart_raw_msgq, frame);
 }
 
-}  // namespace rm_test::app::channels::uart_raw_frame_queue
+}  // namespace channels::uart_raw_frame_queue

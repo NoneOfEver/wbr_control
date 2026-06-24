@@ -14,7 +14,7 @@
 
 #include <mavlink/v2.0/dust_custom/mavlink.h>
 
-#include <app/channels/uart_raw_frame_queue.h>
+#include <channels/uart_raw_frame_queue.h>
 
 namespace {
 
@@ -114,8 +114,8 @@ void MavlinkRxThreadMain()
 			continue;
 		}
 
-		rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage frame = {};
-		if (rm_test::app::channels::uart_raw_frame_queue::DequeueForMavlink(&frame) == 0) {
+		channels::uart_raw_frame_queue::UartRawFrameMessage frame = {};
+		if (channels::uart_raw_frame_queue::DequeueForMavlink(&frame) == 0) {
 			mavlink_message_t msg = {};
 			for (size_t i = 0U; i < frame.len; ++i) {
 				if (mavlink_parse_char(MAVLINK_COMM_0, frame.data[i], &msg, &g_mavlink_parse_status) != 0U) {

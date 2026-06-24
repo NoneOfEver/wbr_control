@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include <app/protocols/pc_link/pc_link.h>
+#include <protocols/pc_link/pc_link.h>
 
 #include <errno.h>
 #include <string.h>
 
-namespace rm_test::app::protocols::pc_link {
+namespace protocols::pc_link {
 
 int EncodeFrame(uint16_t cmd_id,
 		const uint8_t *payload,
@@ -69,4 +69,4 @@ int DecodeFrame(const uint8_t *frame, size_t frame_len, PcFrame *out)
 	return 0;
 }
 
-}  // namespace rm_test::app::protocols::pc_link
+}  // namespace protocols::pc_link

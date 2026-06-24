@@ -12,7 +12,7 @@
 - 编排层：main 直接按 Kconfig 条件初始化并启动模块
 - 业务层：remote_input / chassis
 - 服务层：actuator / chassis_tuning
-- 协议层：app/protocols/motors
+- 协议层：protocols/motors
 - 消息层：zbus channels
 - 平台层：platform/drivers + platform/storage
 
@@ -38,7 +38,7 @@
 
 关键落点：
 - src/main.cpp
-- app/modules/*/*_module.{h,cpp}
+- modules/*/*_module.{h,cpp}
 
 收益：
 - 启动顺序更直观，不再需要注册表中转。
@@ -63,9 +63,9 @@
 - UART 发送路径保持直接调用 `uart_poll_out()`，未额外保留发送包装。
 
 关键落点：
-- app/modules/chassis/chassis_module.cpp
-- app/modules/arm/arm_module.cpp
-- app/modules/gantry/gantry_module.cpp
+- modules/chassis/chassis_module.cpp
+- modules/arm/arm_module.cpp
+- modules/gantry/gantry_module.cpp
 
 收益：
 - 发送路径更直观，module 内能直接看到协议编码与总线发送行为。
@@ -77,10 +77,10 @@
 - chassis 通过 provider 接口注册调参能力。
 
 关键落点：
-- app/debug/shell/chassis_tuning_shell.cpp
-- app/services/chassis/chassis_tuning_service.h
-- app/services/chassis/chassis_tuning_service.cpp
-- app/modules/chassis/chassis_module.cpp
+- debug/shell/chassis_tuning_shell.cpp
+- services/chassis/chassis_tuning_service.h
+- services/chassis/chassis_tuning_service.cpp
+- modules/chassis/chassis_module.cpp
 
 收益：
 - shell 不再依赖模块命名空间全局桥接函数。
@@ -135,8 +135,8 @@
 
 5. include 边界收敛
 - 状态：已完成第二步（2026-04-05）。
-- 实现：新增 `app/include/rm_test/app/...` 稳定接口头，并将上层 include 迁移到 `rm_test/app/...` 前缀；CMake 已进一步移除 `app` 直曝 include 目录。
-- 后续：继续收敛 `app/algorithms` 目录暴露，逐步改为 `rm_test/app/algorithms/...` 稳定前缀。
+- 实现：上层 include 已迁移到应用根目录下的领域前缀（如 `modules/...`、`channels/...`）；CMake 直接暴露应用根目录。
+- 后续：继续收敛 `algorithms` 目录暴露，逐步改为 `rm_test/algorithms/...` 稳定前缀。
 
 6. 测试与回放资产补齐
 - 状态：已完成第一步（2026-04-05）。

@@ -5,8 +5,8 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/sys/printk.h>
 
-#include <app/modules/thread_utils.h>
-#include <app/modules/sys_state/sys_state_module.h>
+#include <modules/thread_utils.h>
+#include <modules/sys_state/sys_state_module.h>
 
 namespace {
 
@@ -62,7 +62,7 @@ uint8_t PercentToDuty(uint8_t pct)
 
 }  // namespace
 
-namespace rm_test::app::modules::sys_state {
+namespace modules::sys_state {
 
 volatile uint32_t g_sys_state_diag_state = kSysStateDiagBoot;
 
@@ -155,7 +155,7 @@ int SysStateModule::Start()
 		return 0;
 	}
 
-	k_tid_t tid = ::rm_test::app::modules::StartMemberThread<SysStateModule, &SysStateModule::RunLoop>(
+	k_tid_t tid = ::modules::StartMemberThread<SysStateModule, &SysStateModule::RunLoop>(
 		&thread_,
 		g_sys_state_module_stack,
 		K_THREAD_STACK_SIZEOF(g_sys_state_module_stack),
@@ -266,4 +266,4 @@ void SysStateModule::RunLoop()
 	}
 }
 
-}  // namespace rm_test::app::modules::sys_state
+}  // namespace modules::sys_state

@@ -9,7 +9,7 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
 
-namespace rm_test::platform::drivers::devices::actuators::serial_servo {
+namespace platform::drivers::devices::actuators::serial_servo {
 
 namespace {
 
@@ -226,4 +226,4 @@ int ReadId(uint8_t query_id, uint8_t *out_id, uint32_t timeout_ms)
 	return 0;
 }
 
-}  // namespace rm_test::platform::drivers::devices::actuators::serial_servo
+}  // namespace platform::drivers::devices::actuators::serial_servo

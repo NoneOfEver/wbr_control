@@ -94,7 +94,7 @@ int ProbeStoragePartitionIo()
 
 }  // namespace
 
-namespace rm_test::platform::storage::filesystem::littlefs_service {
+namespace platform::storage::filesystem::littlefs_service {
 
 int Initialize()
 {
@@ -159,4 +159,4 @@ const char *MountPoint()
 	return g_lfs_mount.mnt_point;
 }
 
-}  // namespace rm_test::platform::storage::filesystem::littlefs_service
+}  // namespace platform::storage::filesystem::littlefs_service

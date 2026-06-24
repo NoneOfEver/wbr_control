@@ -6,9 +6,9 @@
 #include <stdint.h>
 #include <zephyr/zbus/zbus.h>
 
-#include <app/channels/chassis_command_channel.h>
+#include <channels/chassis_command_channel.h>
 
-namespace rm_test::app::channels {
+namespace channels {
 
 struct GantryCommandMessage {
 	float x_delta;
@@ -19,7 +19,7 @@ struct GantryCommandMessage {
 	uint32_t sequence;
 };
 
-}  // namespace rm_test::app::channels
+}  // namespace channels
 
 ZBUS_CHAN_DECLARE(rm_test_gantry_command_chan);
 

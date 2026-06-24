@@ -7,11 +7,11 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/algorithms/control/alg_pid.h>
-#include <app/channels/can_raw_frame_queue.h>
-#include <app/channels/gantry_command_channel.h>
+#include <algorithms/control/alg_pid.h>
+#include <channels/can_raw_frame_queue.h>
+#include <channels/gantry_command_channel.h>
 
-namespace rm_test::app::modules::gantry {
+namespace modules::gantry {
 
 class GantryModule {
 public:
@@ -78,6 +78,6 @@ private:
 	CubemarsState z_right_state_;
 };
 
-}  // namespace rm_test::app::modules::gantry
+}  // namespace modules::gantry
 
 #endif /* RM_TEST_APP_MODULES_GANTRY_GANTRY_MODULE_H_ */

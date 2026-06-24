@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-namespace rm_test::app::channels::uart_raw_frame_queue {
+namespace channels::uart_raw_frame_queue {
 
 constexpr size_t kUartRawChunkSize = 32U;
 
@@ -24,6 +24,6 @@ int DequeueForReferee(UartRawFrameMessage *frame);
 int EnqueueForMavlink(const UartRawFrameMessage *frame);
 int DequeueForMavlink(UartRawFrameMessage *frame);
 
-}  // namespace rm_test::app::channels::uart_raw_frame_queue
+}  // namespace channels::uart_raw_frame_queue
 
 #endif /* RM_TEST_APP_CHANNELS_UART_RAW_FRAME_QUEUE_H_ */

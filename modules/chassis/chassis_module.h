@@ -7,16 +7,16 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/channels/can_raw_frame_queue.h>
-#include <app/algorithms/control/alg_pid.h>
-#include <app/channels/chassis_command_channel.h>
-#include <app/channels/chassis_state_channel.h>
-#include <app/channels/motor_feedback_channel.h>
-#include <app/services/chassis/chassis_tuning_service.h>
+#include <channels/can_raw_frame_queue.h>
+#include <algorithms/control/alg_pid.h>
+#include <channels/chassis_command_channel.h>
+#include <channels/chassis_state_channel.h>
+#include <channels/motor_feedback_channel.h>
+#include <services/chassis/chassis_tuning_service.h>
 
-namespace rm_test::app::modules::chassis {
+namespace modules::chassis {
 
-class ChassisModule : public rm_test::app::services::chassis_tuning::SpeedPidTuningProvider {
+class ChassisModule : public services::chassis_tuning::SpeedPidTuningProvider {
 public:
 	const char *Name() const { return "chassis"; }
 	int Initialize();
@@ -61,6 +61,6 @@ private:
 	struct k_mutex pid_mutex_;
 };
 
-}  // namespace rm_test::app::modules::chassis
+}  // namespace modules::chassis
 
 #endif /* RM_TEST_APP_MODULES_CHASSIS_CHASSIS_MODULE_H_ */

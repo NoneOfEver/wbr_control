@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <zephyr/zbus/zbus.h>
 
-namespace rm_test::app::channels {
+namespace channels {
 
 enum RemoteInputSource : uint8_t {
 	kRemoteInputUnknown = 0,
@@ -28,7 +28,7 @@ struct RemoteInputMessage {
 	uint32_t sequence;
 };
 
-}  // namespace rm_test::app::channels
+}  // namespace channels
 
 ZBUS_CHAN_DECLARE(rm_test_remote_input_chan);
 

@@ -5,14 +5,14 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/algorithms/control/alg_pid.h>
-#include <app/channels/arm_command_channel.h>
-#include <app/channels/can_raw_frame_queue.h>
-#include <app/channels/motor_feedback_channel.h>
-#include <app/channels/arm_state_channel.h>
-#include <app/protocols/motors/dm_motor_protocol.h>
+#include <algorithms/control/alg_pid.h>
+#include <channels/arm_command_channel.h>
+#include <channels/can_raw_frame_queue.h>
+#include <channels/motor_feedback_channel.h>
+#include <channels/arm_state_channel.h>
+#include <protocols/motors/dm_motor_protocol.h>
 
-namespace rm_test::app::modules::arm {
+namespace modules::arm {
 
 class ArmModule {
 public:
@@ -71,9 +71,9 @@ private:
 	float wrist_target_omega_[kWristCount] = {0.0f, 0.0f};
 	channels::MotorFeedbackMessage wrist_feedback_[kWristCount] = {};
 	bool wrist_feedback_valid_[kWristCount] = {false, false};
-	rm_test::app::protocols::motors::dm::DmMotorFeedback1To4 dm_feedback_claw_ = {};
-	rm_test::app::protocols::motors::dm::DmMotorFeedback1To4 dm_feedback_elbow_pitch_ = {};
-	rm_test::app::protocols::motors::dm::DmMotorFeedback1To4 dm_feedback_elbow_yaw_ = {};
+	protocols::motors::dm::DmMotorFeedback1To4 dm_feedback_claw_ = {};
+	protocols::motors::dm::DmMotorFeedback1To4 dm_feedback_elbow_pitch_ = {};
+	protocols::motors::dm::DmMotorFeedback1To4 dm_feedback_elbow_yaw_ = {};
 	bool dm_feedback_claw_valid_ = false;
 	bool dm_feedback_elbow_pitch_valid_ = false;
 	bool dm_feedback_elbow_yaw_valid_ = false;
@@ -83,6 +83,6 @@ private:
 	uint32_t state_sequence_ = 0U;
 };
 
-}  // namespace rm_test::app::modules::arm
+}  // namespace modules::arm
 
 #endif /* RM_TEST_APP_MODULES_ARM_ARM_MODULE_H_ */

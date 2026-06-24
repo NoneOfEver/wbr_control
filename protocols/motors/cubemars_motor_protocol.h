@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-namespace rm_test::app::protocols::motors::cubemars {
+namespace protocols::motors::cubemars {
 
 struct CubemarsFeedback {
 	uint8_t id;
@@ -43,6 +43,6 @@ int GetExitFrame(uint8_t out[8]);
 int GetSaveZeroFrame(uint8_t out[8]);
 int PackMitCommand(const CubemarsMitCommand *cmd, const CubemarsMitRange *range, uint8_t out[8]);
 
-}  // namespace rm_test::app::protocols::motors::cubemars
+}  // namespace protocols::motors::cubemars
 
 #endif /* RM_TEST_APP_PROTOCOLS_MOTORS_CUBEMARS_MOTOR_PROTOCOL_H_ */

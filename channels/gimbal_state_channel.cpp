@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include <app/channels/gimbal_state_channel.h>
+#include <channels/gimbal_state_channel.h>
 
 ZBUS_CHAN_DEFINE(rm_test_gimbal_state_chan,
-		 rm_test::app::channels::GimbalStateMessage,
+		 channels::GimbalStateMessage,
 		 NULL,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,

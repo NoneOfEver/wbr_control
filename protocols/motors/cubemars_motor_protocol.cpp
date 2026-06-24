@@ -6,9 +6,9 @@
 
 #include <algorithm>
 
-#include <app/protocols/motors/cubemars_motor_protocol.h>
+#include <protocols/motors/cubemars_motor_protocol.h>
 
-namespace rm_test::app::protocols::motors::cubemars {
+namespace protocols::motors::cubemars {
 
 namespace {
 
@@ -86,4 +86,4 @@ int PackMitCommand(const CubemarsMitCommand *cmd, const CubemarsMitRange *range,
 	return 0;
 }
 
-}  // namespace rm_test::app::protocols::motors::cubemars
+}  // namespace protocols::motors::cubemars

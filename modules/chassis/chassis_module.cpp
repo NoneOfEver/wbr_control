@@ -5,13 +5,12 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
-#include <algorithm>
 #include <errno.h>
 
-#include <app/modules/thread_utils.h>
-#include <app/modules/chassis/chassis_module.h>
-#include <app/protocols/motors/dji_motor_protocol.h>
-#include <app/services/chassis/chassis_tuning_service.h>
+#include <modules/thread_utils.h>
+#include <modules/chassis/chassis_module.h>
+#include <protocols/motors/dji_motor_protocol.h>
+#include <services/chassis/chassis_tuning_service.h>
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
 #include <zephyr/device.h>
@@ -67,7 +66,7 @@ int SendDjiCurrent0x200OnCan1(const int16_t current_cmd[4])
 
 	uint8_t frame[8] = {0U};
 	const int encode_rc =
-		rm_test::app::protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
+		protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
 	if (encode_rc != 0) {
 		return encode_rc;
 	}
@@ -77,7 +76,7 @@ int SendDjiCurrent0x200OnCan1(const int16_t current_cmd[4])
 
 }  // namespace
 
-namespace rm_test::app::modules::chassis {
+namespace modules::chassis {
 
 int ChassisModule::Initialize()
 {
@@ -87,13 +86,13 @@ int ChassisModule::Initialize()
 	started_ = false;
 	(void)k_mutex_init(&pid_mutex_);
 
-	const int unregister_rc = rm_test::app::services::chassis_tuning::UnregisterProvider(this);
+	const int unregister_rc = services::chassis_tuning::UnregisterProvider(this);
 	if ((unregister_rc != 0) && (unregister_rc != -ENOENT)) {
 		return unregister_rc;
 	}
 
 	const int register_rc =
-		rm_test::app::services::chassis_tuning::RegisterProvider(this, "chassis_module", 100);
+		services::chassis_tuning::RegisterProvider(this, "chassis_module", 100);
 	if (register_rc != 0) {
 		return register_rc;
 	}
@@ -171,7 +170,7 @@ int ChassisModule::Start()
 		return 0;
 	}
 
-	::rm_test::app::modules::StartMemberThread<ChassisModule, &ChassisModule::RunLoop>(
+	::modules::StartMemberThread<ChassisModule, &ChassisModule::RunLoop>(
 		&thread_,
 		g_chassis_module_stack,
 		K_THREAD_STACK_SIZEOF(g_chassis_module_stack),
@@ -212,8 +211,8 @@ void ChassisModule::RunLoop()
 void ChassisModule::DecodeCanFramesInQueue()
 {
 	while (true) {
-		rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
-		if (rm_test::app::channels::can_raw_frame_queue::DequeueForChassis(&frame) != 0) {
+		channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
+		if (channels::can_raw_frame_queue::DequeueForChassis(&frame) != 0) {
 			break;
 		}
 
@@ -225,8 +224,8 @@ void ChassisModule::DecodeCanFramesInQueue()
 			continue;
 		}
 
-		rm_test::app::protocols::motors::dji::DjiMotorFeedback decoded = {};
-		if (rm_test::app::protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &decoded) != 0) {
+		protocols::motors::dji::DjiMotorFeedback decoded = {};
+		if (protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &decoded) != 0) {
 			continue;
 		}
 
@@ -314,4 +313,4 @@ void ChassisModule::ApplyWheelSpeedPidAndSend()
 	}
 }
 
-}  // namespace rm_test::app::modules::chassis
+}  // namespace modules::chassis

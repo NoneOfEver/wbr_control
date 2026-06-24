@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <zephyr/zbus/zbus.h>
 
-namespace rm_test::app::channels {
+namespace channels {
 
 enum ChassisInputSource : uint8_t {
 	kInputSourceUnknown = 0,
@@ -24,7 +24,7 @@ struct ChassisCommandMessage {
 	uint32_t sequence;
 };
 
-}  // namespace rm_test::app::channels
+}  // namespace channels
 
 ZBUS_CHAN_DECLARE(rm_test_chassis_command_chan);
 

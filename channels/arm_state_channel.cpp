@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include <app/channels/arm_state_channel.h>
+#include <channels/arm_state_channel.h>
 
 ZBUS_CHAN_DEFINE(rm_test_arm_state_chan,
-		 rm_test::app::channels::ArmStateMessage,
+		 channels::ArmStateMessage,
 		 NULL,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,

@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-namespace rm_test::app::protocols::motors::dm {
+namespace protocols::motors::dm {
 
 struct DmMotorFeedback1To4 {
 	uint16_t encoder;
@@ -50,6 +50,6 @@ int GetControlCommandFrame(DmControlCommand cmd, uint8_t out[8]);
 int PackMitCommand(const DmMitCommand *cmd, const DmMitRange *range, uint8_t out[8]);
 int Pack1To4CurrentFrame(uint16_t motor_can_id, int16_t current_ma, uint8_t frame_payload[8]);
 
-}  // namespace rm_test::app::protocols::motors::dm
+}  // namespace protocols::motors::dm
 
 #endif /* RM_TEST_APP_PROTOCOLS_MOTORS_DM_MOTOR_PROTOCOL_H_ */

@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include <app/protocols/remote_input/dr16_protocol.h>
+#include <protocols/remote_input/dr16_protocol.h>
 
-namespace rm_test::app::protocols::remote_input::dr16 {
+namespace protocols::remote_input::dr16 {
 
 namespace {
 
@@ -70,4 +70,4 @@ bool DecodeFrame(const uint8_t *data, size_t len, Dr16Frame *out)
 	return true;
 }
 
-}  // namespace rm_test::app::protocols::remote_input::dr16
+}  // namespace protocols::remote_input::dr16

@@ -9,14 +9,14 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/channels/arm_command_channel.h>
-#include <app/channels/chassis_command_channel.h>
-#include <app/channels/gantry_command_channel.h>
-#include <app/channels/gimbal_command_channel.h>
-#include <app/channels/remote_input_channel.h>
-#include <app/channels/uart_raw_frame_queue.h>
+#include <channels/arm_command_channel.h>
+#include <channels/chassis_command_channel.h>
+#include <channels/gantry_command_channel.h>
+#include <channels/gimbal_command_channel.h>
+#include <channels/remote_input_channel.h>
+#include <channels/uart_raw_frame_queue.h>
 
-namespace rm_test::app::modules::remote_input {
+namespace modules::remote_input {
 
 class RemoteInputModule {
 public:
@@ -54,6 +54,6 @@ private:
 	size_t binary_len_ = 0U;
 };
 
-}  // namespace rm_test::app::modules::remote_input
+}  // namespace modules::remote_input
 
 #endif /* RM_TEST_APP_MODULES_REMOTE_INPUT_REMOTE_INPUT_MODULE_H_ */

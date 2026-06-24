@@ -7,21 +7,21 @@
 
 - 阶段 A：已完成（导览、active/staged 标记、维护约定）。
 - 阶段 B：已完成前三步中的前两步，第三步已完成“语义入口层”子任务。
-  - 已完成：`app/core` 目录迁移到 `app/modules`（源码与主头路径）。
-  - 已完成：核心命名空间迁移到 `rm_test::app::modules`。
-  - 已完成：`app/core` 目录已直接删除（无兼容层）。
-  - 已完成：建立 `app/{channels,modules,services,protocols}` 语义目录与 `rm_test/app/*` 稳定头入口。
-  - 已完成：active 主链路 include 统一切换到 `rm_test/app/*`。
-  - 已完成：`app/channels` 实体文件已迁入 `app/channels`，并完成 CMake 源列表切换。
-  - 已完成：`app/services` 实体文件已迁入 `app/services`，并完成 CMake 源列表切换。
-  - 已完成：`app/modules` 实体文件已迁入 `app/modules`，并完成 CMake 源列表切换。
-  - 已完成：`app/protocols` 实体文件已迁入 `app/protocols`，并完成 CMake 源列表切换。
+  - 已完成：`core` 目录迁移到 `modules`（源码与主头路径）。
+  - 已完成：核心命名空间迁移到顶层领域命名空间（如 `modules`、`channels`、`protocols`、`services`）。
+  - 已完成：`core` 目录已直接删除（无兼容层）。
+  - 已完成：建立 `app/{channels,modules,services,protocols}` 语义目录与 `app/*` 稳定头入口。
+  - 已完成：active 主链路 include 统一切换到 `app/*`。
+  - 已完成：`channels` 实体文件已迁入 `channels`，并完成 CMake 源列表切换。
+  - 已完成：`services` 实体文件已迁入 `services`，并完成 CMake 源列表切换。
+  - 已完成：`modules` 实体文件已迁入 `modules`，并完成 CMake 源列表切换。
+  - 已完成：`protocols` 实体文件已迁入 `protocols`，并完成 CMake 源列表切换。
   - 验证：默认构建与 smoke 回归通过。
 - 阶段 C：已完成。
-  - 已完成：staged 模块已集中迁入 `app/modules/staging/*`，与 active 模块物理分区。
+  - 已完成：staged 模块已集中迁入 `modules/staging/*`，与 active 模块物理分区。
   - 已完成（第 2 步）：
-    - 第一刀：移除 `app/algorithms/orientation/` 中 MahonyAHRS 占位重复文件，保留 `app/algorithms/MahonyAHRS.{h,cpp}` 作为唯一实现来源。
-    - 第二刀：移除空 `app/algorithms/orientation/` 目录，并新增 `tools/algorithms_dedupe_audit.sh` 作为去重审计基线。
+    - 第一刀：移除 `algorithms/orientation/` 中 MahonyAHRS 占位重复文件，保留 `algorithms/MahonyAHRS.{h,cpp}` 作为唯一实现来源。
+    - 第二刀：移除空 `algorithms/orientation/` 目录，并新增 `tools/algorithms_dedupe_audit.sh` 作为去重审计基线。
   - 已完成（第 3 步）：建立 `platform/legacy/*` 归档分区并迁入 `platform/legacy/board/legacy_dm_h723`，同时落地平台归档策略文档。
 
 ## 1. 问题定义
@@ -29,13 +29,13 @@
 当前目录虽然功能上可用，但存在以下开发体验问题：
 
 1. 入口分散
-- 启动编排已收敛到 `src/main.cpp`，模块生命周期基础设施保留在 `app/modules/`。
+- 启动编排已收敛到 `src/main.cpp`，模块生命周期基础设施保留在 `modules/`。
 
 2. 语义层次混杂
 - `app/` 下既有领域逻辑（modules/services/protocols/channels），又有历史算法资产和调试资产，边界不够直观。
 
 3. 公共头导出路径不统一
-- 目前同时存在 `include/rm_test/platform/*` 与 `app/include/rm_test/app/*`，理解成本偏高。
+- 目前同时存在 `include/rm_test/platform/*` 与 `app/include/app/*`，理解成本偏高。
 
 4. 历史迁移目录与当前主干并存
 - `arm/gimbal/gantry/referee` 等目录仍以迁移占位为主，和当前已接线主干（remote_input/chassis）混在一起。
@@ -84,7 +84,7 @@ applications/rm_test/
 
   include/
     rm_test/
-      app/...                   # app 层公共 API（统一导出）
+      modules/...               # 领域层公共 API（统一导出）
       platform/...              # platform 层公共 API（统一导出）
 
   docs/
@@ -101,10 +101,10 @@ applications/rm_test/
 
 2. 头文件导出规则
 - 上层代码只能 include：
-  - `#include <rm_test/app/...>`（优先，领域层）
-  - `#include <rm_test/app/modules/...>`（启动编排层）
+  - `#include <modules/...>`、`#include <channels/...>` 等领域目录头路径
+  - `#include <rm_test/modules/...>`（启动编排层）
   - `#include <rm_test/platform/...>`
-- 禁止上层直接 include 源码目录相对路径（例如 `app/modules/...`）。
+- 禁止上层直接 include 源码目录相对路径（例如 `modules/...`）。
 
 3. 依赖方向规则
 - `domain/modules -> domain/services -> platform`
@@ -122,12 +122,12 @@ applications/rm_test/
 - `src/main.cpp`
 
 2. 当前主链路
-- 输入：`app/modules/remote_input`
-- 控制：`app/modules/chassis`
-- 下发：`app/services/actuator`
+- 输入：`modules/remote_input`
+- 控制：`modules/chassis`
+- 下发：`services/actuator`
 
 3. 调参与运维
-- Shell：`app/debug/shell/chassis_tuning_shell.cpp`
+- Shell：`debug/shell/chassis_tuning_shell.cpp`
 - 最小回归：`tools/smoke_regression.sh`
 
 ## 6. 分阶段迁移计划（低风险）
@@ -136,16 +136,16 @@ applications/rm_test/
 
 1. 补充目录 README 与“active/staging”标记。
 2. 在 docs 中固定入口索引（main/bootstrap/domain chain）。
-3. 统一 include 风格到 `rm_test/app/*` 与 `rm_test/platform/*`。
+3. 统一 include 风格到 `app/*` 与 `rm_test/platform/*`。
 
 退出条件：
 - 新同学 5 分钟内能定位入口与主链路。
 
 ### 阶段 B：轻量重命名（少量挪动）
 
-1. 已完成：`app/core` -> `app/modules`，且兼容层已删除。
-2. 已完成（语义入口层）：建立 `app/*` 与 `rm_test/app/*` 稳定头入口，并将 active 主链路 include 切换到该入口。
-3. 已完成（物理目录迁移）：`app/channels`、`app/services`、`app/modules`、`app/protocols` 已迁入 `app/*`。
+1. 已完成：`core` -> `modules`，且兼容层已删除。
+2. 已完成（语义入口层）：建立 `app/*` 与 `app/*` 稳定头入口，并将 active 主链路 include 切换到该入口。
+3. 已完成（物理目录迁移）：`channels`、`services`、`modules`、`protocols` 已迁入 `app/*`。
 4. 已完成：CMake source 列表与 include 导出已随物理迁移同步。
 
 退出条件：
@@ -163,7 +163,7 @@ applications/rm_test/
 ## 7. 本周可立即执行的最小动作
 
 1. 在 `docs/` 增加目录导览页（入口/主链路/调试入口）。
-2. 已完成：staged 模块已收敛到 `app/modules/staging/*`。
+2. 已完成：staged 模块已收敛到 `modules/staging/*`。
 3. 进入后续能力演进：补齐回放/实机测试资产与服务层能力扩展。
 
 ## 8. 风险与回滚

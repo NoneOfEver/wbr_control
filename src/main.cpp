@@ -8,14 +8,14 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/printk.h>
 
-#include <app/channels/system_status_channel.h>
-#include <app/modules/arm/arm_module.h>
-#include <app/modules/chassis/chassis_module.h>
-#include <app/modules/gantry/gantry_module.h>
-#include <app/modules/gimbal/gimbal_module.h>
-#include <app/modules/referee/referee_module.h>
-#include <app/modules/remote_input/remote_input_module.h>
-#include <app/modules/sys_state/sys_state_module.h>
+#include <channels/system_status_channel.h>
+#include <modules/arm/arm_module.h>
+#include <modules/chassis/chassis_module.h>
+#include <modules/gantry/gantry_module.h>
+#include <modules/gimbal/gimbal_module.h>
+#include <modules/referee/referee_module.h>
+#include <modules/remote_input/remote_input_module.h>
+#include <modules/sys_state/sys_state_module.h>
 #include <platform/board/board_identity.h>
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && CONFIG_RM_TEST_RUNTIME_INIT_CAN
@@ -36,20 +36,19 @@
 
 namespace {
 
-rm_test::app::modules::sys_state::SysStateModule g_sys_state_module;
-rm_test::app::modules::remote_input::RemoteInputModule g_remote_input_module;
-rm_test::app::modules::chassis::ChassisModule g_chassis_module;
-rm_test::app::modules::arm::ArmModule g_arm_module;
-rm_test::app::modules::gimbal::GimbalModule g_gimbal_module;
-rm_test::app::modules::gantry::GantryModule g_gantry_module;
-rm_test::app::modules::referee::RefereeModule g_referee_module;
+modules::sys_state::SysStateModule g_sys_state_module;
+modules::remote_input::RemoteInputModule g_remote_input_module;
+modules::chassis::ChassisModule g_chassis_module;
+modules::arm::ArmModule g_arm_module;
+modules::gimbal::GimbalModule g_gimbal_module;
+modules::gantry::GantryModule g_gantry_module;
+modules::referee::RefereeModule g_referee_module;
 
 }  // namespace
 
 int main(void)
 {
-	using rm_test::app::channels::SystemStatusMessage;
-	namespace channels = rm_test::app::channels;
+	using channels::SystemStatusMessage;
 
 	printk("rm_test started on %s\n", board_identity_name());
 
@@ -64,7 +63,7 @@ int main(void)
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_UART) && CONFIG_RM_TEST_RUNTIME_INIT_UART
 	if (IS_ENABLED(CONFIG_RM_TEST_RUNTIME_INIT_UART)) {
-		rc = rm_test::platform::drivers::communication::uart_dispatch::Initialize();
+		rc = platform::drivers::communication::uart_dispatch::Initialize();
 		if (rc != 0) {
 			printk("uart_dispatch init failed: %d\n", rc);
 			return rc;
@@ -74,7 +73,7 @@ int main(void)
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && CONFIG_RM_TEST_RUNTIME_INIT_CAN
 	if (IS_ENABLED(CONFIG_RM_TEST_RUNTIME_INIT_CAN)) {
-		rc = rm_test::platform::drivers::communication::can_dispatch::Initialize();
+		rc = platform::drivers::communication::can_dispatch::Initialize();
 		if (rc != 0) {
 			if (rc == -ENODEV) {
 				printk("can_dispatch init skipped: no CAN device\n");
@@ -88,7 +87,7 @@ int main(void)
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_USB) && CONFIG_RM_TEST_RUNTIME_INIT_USB
 	if (IS_ENABLED(CONFIG_RM_TEST_RUNTIME_INIT_USB)) {
-		rc = rm_test::platform::drivers::communication::usb_session::Initialize();
+		rc = platform::drivers::communication::usb_session::Initialize();
 		if (rc != 0) {
 			if (rc == -ENODEV) {
 				printk("usb_session init skipped: no USB device\n");
@@ -102,7 +101,7 @@ int main(void)
 
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_LITTLEFS) && CONFIG_RM_TEST_RUNTIME_INIT_LITTLEFS
 	if (IS_ENABLED(CONFIG_RM_TEST_RUNTIME_INIT_LITTLEFS)) {
-		rc = rm_test::platform::storage::filesystem::littlefs_service::Initialize();
+		rc = platform::storage::filesystem::littlefs_service::Initialize();
 		if (rc != 0) {
 			printk("littlefs init skipped: %d\n", rc);
 		}

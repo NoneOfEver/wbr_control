@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <zephyr/zbus/zbus.h>
 
-namespace rm_test::app::channels {
+namespace channels {
 
 struct ArmStateMessage {
 	float claw_virtual_angle;
@@ -17,7 +17,7 @@ struct ArmStateMessage {
 	uint32_t sequence;
 };
 
-}  // namespace rm_test::app::channels
+}  // namespace channels
 
 ZBUS_CHAN_DECLARE(rm_test_arm_state_chan);
 

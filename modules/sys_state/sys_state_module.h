@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 
 
-namespace rm_test::app::modules::sys_state {
+namespace modules::sys_state {
 
 enum : uint32_t {
 	kSysStateDiagBoot = 0U,
@@ -57,6 +57,6 @@ private:
 	uint8_t buzzer_duty_pct_ = 0U;
 };
 
-}  // namespace rm_test::app::modules::sys_state
+}  // namespace modules::sys_state
 
 #endif /* RM_TEST_APP_MODULES_SYS_STATE_SYS_STATE_MODULE_H_ */

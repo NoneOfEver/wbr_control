@@ -7,7 +7,7 @@
 
 #include <zephyr/kernel.h>
 
-namespace rm_test::platform::drivers::devices::system::referee_client {
+namespace platform::drivers::devices::system::referee_client {
 
 namespace {
 
@@ -19,7 +19,7 @@ constexpr uint16_t kCmdShootData = 0x0207U;
 
 uint8_t g_stream_buf[kMaxFrameSize] = {0};
 size_t g_stream_len = 0U;
-rm_test::app::channels::RefereeStateMessage g_state = {};
+channels::RefereeStateMessage g_state = {};
 struct k_mutex g_state_mutex;
 bool g_initialized = false;
 
@@ -172,7 +172,7 @@ int FeedBytes(const uint8_t *data, size_t len)
 	return 0;
 }
 
-int GetLatestState(rm_test::app::channels::RefereeStateMessage *out)
+int GetLatestState(channels::RefereeStateMessage *out)
 {
 	if (out == nullptr) {
 		return -EINVAL;
@@ -191,4 +191,4 @@ int GetLatestState(rm_test::app::channels::RefereeStateMessage *out)
 	return 0;
 }
 
-}  // namespace rm_test::platform::drivers::devices::system::referee_client
+}  // namespace platform::drivers::devices::system::referee_client

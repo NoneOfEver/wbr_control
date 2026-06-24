@@ -8,31 +8,31 @@
 - src/main.cpp
 
 2. 当前运行主链路（active）
-- 输入模块：app/modules/remote_input
-- 控制模块：app/modules/chassis
-- 执行服务：app/services/actuator
-- 调参服务：app/services/chassis
-- 协议层：app/protocols/motors
+- 输入模块：modules/remote_input
+- 控制模块：modules/chassis
+- 执行服务：services/actuator
+- 调参服务：services/chassis
+- 协议层：protocols/motors
 - 平台通信：platform/drivers/communication
 
 3. 调试与回归入口
-- Shell 命令：app/debug/shell/chassis_tuning_shell.cpp
+- Shell 命令：debug/shell/chassis_tuning_shell.cpp
 - 最小回归脚本：tools/smoke_regression.sh
 - 回归说明：docs/SMOKE_REGRESSION.md
 
 ## 2. 目录分层速览
 
 - src/: Zephyr 主入口
-- app/modules/: 模块生命周期管理
-- app/: 领域语义聚合入口（含 channels/modules/services/protocols）
-- app/modules/: legacy 说明目录（实体实现已迁移至 app/modules）
-- app/services/: legacy 说明目录（实体实现已迁移至 app/services）
-- app/channels/: legacy 说明目录（实体实现已迁移至 app/channels）
-- app/protocols/: legacy 说明目录（实体实现已迁移至 app/protocols）
-- app/algorithms/: 算法资产
+- modules/: 模块生命周期管理
+- 应用根目录：领域语义聚合入口（含 channels/modules/services/protocols）
+- modules/: legacy 说明目录（实体实现已迁移至 modules）
+- services/: legacy 说明目录（实体实现已迁移至 services）
+- channels/: legacy 说明目录（实体实现已迁移至 channels）
+- protocols/: legacy 说明目录（实体实现已迁移至 protocols）
+- algorithms/: 算法资产
 - platform/: 板级、驱动、存储适配
 - platform/legacy/: 平台历史资产归档分区（不参与当前主链路）
-- include/ + app/include/: 对外稳定头路径（rm_test 前缀）
+- 应用根目录 include：对外稳定头路径（如 modules/*、channels/*、platform/*）
 - docs/: 架构、迁移、交接与规范文档
 - tools/: 自动化脚本（如 smoke 回归）
 
@@ -46,23 +46,23 @@
 当前模块状态：
 
 - active
-  - app/modules/chassis
-  - app/modules/remote_input
+  - modules/chassis
+  - modules/remote_input
 
 - staged
-  - app/modules/staging/arm
-  - app/modules/staging/gimbal
-  - app/modules/staging/gantry
-  - app/modules/staging/referee
+  - modules/staging/arm
+  - modules/staging/gimbal
+  - modules/staging/gantry
+  - modules/staging/referee
 
 ## 4. 建议阅读顺序
 
 1. docs/AGENT_HANDOFF.md
 2. docs/LAYERING_DECOUPLING_STATUS.md
 3. docs/DIRECTORY_RESTRUCTURE_PLAN.md
-4. app/modules/src/module_manager.cpp
-5. app/modules/remote_input/remote_input_module.cpp
-6. app/modules/chassis/chassis_module.cpp
+4. modules/src/module_manager.cpp
+5. modules/remote_input/remote_input_module.cpp
+6. modules/chassis/chassis_module.cpp
 
 ## 5. 结构重构计划
 

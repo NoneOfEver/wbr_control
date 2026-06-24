@@ -5,10 +5,10 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/channels/gimbal_command_channel.h>
-#include <app/channels/gimbal_state_channel.h>
+#include <channels/gimbal_command_channel.h>
+#include <channels/gimbal_state_channel.h>
 
-namespace rm_test::app::modules::gimbal {
+namespace modules::gimbal {
 
 class GimbalModule {
 public:
@@ -54,6 +54,6 @@ private:
 	uint32_t state_sequence_ = 0U;
 };
 
-}  // namespace rm_test::app::modules::gimbal
+}  // namespace modules::gimbal
 
 #endif /* RM_TEST_APP_MODULES_GIMBAL_GIMBAL_MODULE_H_ */

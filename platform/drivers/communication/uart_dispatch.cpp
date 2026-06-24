@@ -9,7 +9,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#include <app/channels/uart_raw_frame_queue.h>
+#include <channels/uart_raw_frame_queue.h>
 
 #include "uart_dispatch.h"
 
@@ -41,17 +41,17 @@ void RouteUartBytesToModuleQueues(const uint8_t *data, size_t len)
 
 	size_t offset = 0U;
 	while (offset < len) {
-		rm_test::app::channels::uart_raw_frame_queue::UartRawFrameMessage msg = {};
+		channels::uart_raw_frame_queue::UartRawFrameMessage msg = {};
 		const size_t step =
-			((len - offset) > rm_test::app::channels::uart_raw_frame_queue::kUartRawChunkSize)
-				? rm_test::app::channels::uart_raw_frame_queue::kUartRawChunkSize
+			((len - offset) > channels::uart_raw_frame_queue::kUartRawChunkSize)
+				? channels::uart_raw_frame_queue::kUartRawChunkSize
 				: (len - offset);
 		msg.len = static_cast<uint8_t>(step);
 		memcpy(msg.data, data + offset, step);
 		offset += step;
-		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForRemoteInput(&msg);
-		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForReferee(&msg);
-		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForMavlink(&msg);
+		(void)channels::uart_raw_frame_queue::EnqueueForRemoteInput(&msg);
+		(void)channels::uart_raw_frame_queue::EnqueueForReferee(&msg);
+		(void)channels::uart_raw_frame_queue::EnqueueForMavlink(&msg);
 	}
 }
 
@@ -87,7 +87,7 @@ void UartRxCallback(const struct device *dev, struct uart_event *evt, void *user
 
 }  // namespace
 
-namespace rm_test::platform::drivers::communication::uart_dispatch {
+namespace platform::drivers::communication::uart_dispatch {
 
 int Initialize()
 {
@@ -126,4 +126,4 @@ int Initialize()
 	return 0;
 }
 
-}  // namespace rm_test::platform::drivers::communication::uart_dispatch
+}  // namespace platform::drivers::communication::uart_dispatch

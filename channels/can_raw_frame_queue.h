@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-namespace rm_test::app::channels::can_raw_frame_queue {
+namespace channels::can_raw_frame_queue {
 
 struct CanRawFrameMessage {
 	uint8_t bus;
@@ -26,6 +26,6 @@ int DequeueForGimbal(CanRawFrameMessage *frame);
 int EnqueueForGantry(const CanRawFrameMessage *frame);
 int DequeueForGantry(CanRawFrameMessage *frame);
 
-}  // namespace rm_test::app::channels::can_raw_frame_queue
+}  // namespace channels::can_raw_frame_queue
 
 #endif /* RM_TEST_APP_CHANNELS_CAN_RAW_FRAME_QUEUE_H_ */

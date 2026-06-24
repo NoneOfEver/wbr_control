@@ -7,14 +7,14 @@
 
 #include <zephyr/kernel.h>
 
-#include <app/services/chassis/chassis_tuning_service.h>
+#include <services/chassis/chassis_tuning_service.h>
 
 namespace {
 
 constexpr size_t kMaxProviders = 8U;
 
 struct ProviderSlot {
-	rm_test::app::services::chassis_tuning::SpeedPidTuningProvider *provider;
+	services::chassis_tuning::SpeedPidTuningProvider *provider;
 	const char *name;
 	int priority;
 	uint32_t order;
@@ -27,7 +27,7 @@ uint32_t g_next_order = 1U;
 K_MUTEX_DEFINE(g_provider_mutex);
 
 size_t FindSlotByProviderLocked(
-	rm_test::app::services::chassis_tuning::SpeedPidTuningProvider *provider)
+	services::chassis_tuning::SpeedPidTuningProvider *provider)
 {
 	for (size_t i = 0U; i < kMaxProviders; ++i) {
 		if (g_slots[i].in_use && (g_slots[i].provider == provider)) {
@@ -69,7 +69,7 @@ const ProviderSlot *FindActiveSlotLocked()
 
 }  // namespace
 
-namespace rm_test::app::services::chassis_tuning {
+namespace services::chassis_tuning {
 
 int RegisterProvider(SpeedPidTuningProvider *provider)
 {
@@ -219,4 +219,4 @@ int ResetSpeedPidIntegrator()
 	return provider->ResetSpeedPidIntegrator();
 }
 
-}  // namespace rm_test::app::services::chassis_tuning
+}  // namespace services::chassis_tuning

@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-namespace rm_test::app::protocols::remote_input::dr16 {
+namespace protocols::remote_input::dr16 {
 
 constexpr size_t kFrameLength = 18;
 
@@ -23,6 +23,6 @@ struct Dr16Frame {
 
 bool DecodeFrame(const uint8_t *data, size_t len, Dr16Frame *out);
 
-}  // namespace rm_test::app::protocols::remote_input::dr16
+}  // namespace protocols::remote_input::dr16
 
 #endif /* RM_TEST_APP_PROTOCOLS_REMOTE_INPUT_DR16_PROTOCOL_H_ */

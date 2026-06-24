@@ -13,7 +13,7 @@
 #include <zephyr/sys/printk.h>
 
 #include <platform/storage/filesystem/littlefs_service.h>
-#include <app/services/chassis/chassis_tuning_service.h>
+#include <services/chassis/chassis_tuning_service.h>
 
 namespace {
 
@@ -117,7 +117,7 @@ int CmdPidGet(const struct shell *shell, size_t argc, char **argv)
 	float i_limit = 0.0f;
 	float out_limit = 0.0f;
 
-	const int rc = rm_test::app::services::chassis_tuning::GetSpeedPidTuning(
+	const int rc = services::chassis_tuning::GetSpeedPidTuning(
 		&kp, &ki, &kd, &i_limit, &out_limit);
 	if (rc != 0) {
 		shell_error(shell, "get pid failed: %d", rc);
@@ -181,7 +181,7 @@ int CmdPidSet(const struct shell *shell, size_t argc, char **argv)
 		return -EINVAL;
 	}
 
-	const int rc = rm_test::app::services::chassis_tuning::SetSpeedPidTuning(
+	const int rc = services::chassis_tuning::SetSpeedPidTuning(
 		kp, ki, kd, i_limit, out_limit);
 	if (rc != 0) {
 		shell_error(shell, "set pid failed: %d", rc);
@@ -197,7 +197,7 @@ int CmdPidResetI(const struct shell *shell, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	const int rc = rm_test::app::services::chassis_tuning::ResetSpeedPidIntegrator();
+	const int rc = services::chassis_tuning::ResetSpeedPidIntegrator();
 	if (rc != 0) {
 		shell_error(shell, "reset integrator failed: %d", rc);
 		return rc;
@@ -215,7 +215,7 @@ int CmdPidStatus(const struct shell *shell, size_t argc, char **argv)
 	const char *active_name = nullptr;
 	int active_priority = 0;
 	size_t provider_count = 0U;
-	const int rc = rm_test::app::services::chassis_tuning::GetProviderStatus(
+	const int rc = services::chassis_tuning::GetProviderStatus(
 		&active_name, &active_priority, &provider_count);
 
 	if (rc == -ENOENT) {
@@ -241,7 +241,7 @@ int CmdPidSave(const struct shell *shell, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	const int mount_rc = rm_test::platform::storage::filesystem::littlefs_service::Initialize();
+	const int mount_rc = platform::storage::filesystem::littlefs_service::Initialize();
 	if (mount_rc != 0) {
 		shell_error(shell, "littlefs init failed: %d", mount_rc);
 		return mount_rc;
@@ -252,7 +252,7 @@ int CmdPidSave(const struct shell *shell, size_t argc, char **argv)
 	float kd = 0.0f;
 	float i_limit = 0.0f;
 	float out_limit = 0.0f;
-	int rc = rm_test::app::services::chassis_tuning::GetSpeedPidTuning(
+	int rc = services::chassis_tuning::GetSpeedPidTuning(
 		&kp, &ki, &kd, &i_limit, &out_limit);
 	if (rc != 0) {
 		shell_error(shell, "get pid failed: %d", rc);
@@ -306,7 +306,7 @@ int CmdPidLoad(const struct shell *shell, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	const int mount_rc = rm_test::platform::storage::filesystem::littlefs_service::Initialize();
+	const int mount_rc = platform::storage::filesystem::littlefs_service::Initialize();
 	if (mount_rc != 0) {
 		shell_error(shell, "littlefs init failed: %d", mount_rc);
 		return mount_rc;
@@ -338,7 +338,7 @@ int CmdPidLoad(const struct shell *shell, size_t argc, char **argv)
 		return rc;
 	}
 
-	rc = rm_test::app::services::chassis_tuning::SetSpeedPidTuning(
+	rc = services::chassis_tuning::SetSpeedPidTuning(
 		values[0], values[1], values[2], values[3], values[4]);
 	if (rc != 0) {
 		shell_error(shell, "apply pid failed: %d", rc);
@@ -354,7 +354,7 @@ int CmdPidDump(const struct shell *shell, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	const int mount_rc = rm_test::platform::storage::filesystem::littlefs_service::Initialize();
+	const int mount_rc = platform::storage::filesystem::littlefs_service::Initialize();
 	if (mount_rc != 0) {
 		shell_error(shell, "littlefs init failed: %d", mount_rc);
 		return mount_rc;

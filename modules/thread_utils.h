@@ -7,7 +7,7 @@
 
 #include <zephyr/kernel.h>
 
-namespace rm_test::app::modules {
+namespace modules {
 
 template <typename T, void (T::*ThreadMain)()>
 inline k_tid_t StartMemberThread(struct k_thread *thread,
@@ -44,6 +44,6 @@ inline k_tid_t StartMemberThread(struct k_thread *thread,
 	return tid;
 }
 
-}  // namespace rm_test::app::modules
+}  // namespace modules
 
 #endif /* RM_TEST_APP_MODULES_THREAD_UTILS_H_ */

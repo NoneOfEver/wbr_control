@@ -5,14 +5,14 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
-#include <app/channels/usb_raw_frame_queue.h>
+#include <channels/usb_raw_frame_queue.h>
 
 namespace {
 
 constexpr size_t kQueueDepth = 16U;
 
 K_MSGQ_DEFINE(g_cdc_acm_usb_raw_msgq,
-	     sizeof(rm_test::app::channels::usb_raw_frame_queue::UsbRawFrameMessage),
+	     sizeof(channels::usb_raw_frame_queue::UsbRawFrameMessage),
 	     kQueueDepth,
 	     4);
 
@@ -31,7 +31,7 @@ k_timeout_t TimeoutFromMs(int32_t timeout_ms)
 
 }  // namespace
 
-namespace rm_test::app::channels::usb_raw_frame_queue {
+namespace channels::usb_raw_frame_queue {
 
 int EnqueueForCdcAcm(const UsbRawFrameMessage *frame)
 {
@@ -51,4 +51,4 @@ int DequeueForCdcAcm(UsbRawFrameMessage *frame, int32_t timeout_ms)
 	return k_msgq_get(&g_cdc_acm_usb_raw_msgq, frame, TimeoutFromMs(timeout_ms));
 }
 
-}  // namespace rm_test::app::channels::usb_raw_frame_queue
+}  // namespace channels::usb_raw_frame_queue

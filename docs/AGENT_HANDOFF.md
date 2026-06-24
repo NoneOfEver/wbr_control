@@ -40,14 +40,10 @@ rm_test 已经不是“仅骨架”阶段，而是“主干可运行 + 分层已
 
 结构迁移状态（阶段 B）：
 - 启动编排已收敛到 `src/main.cpp`，模块实例也在 main 中直接拉起。
-- 核心命名空间已迁移为 `rm_test::app::modules`。
-- `app/core` 已彻底删除（无兼容层残留），统一使用 `rm_test/app/modules/*` 头路径。
-- 已建立 `app/*` 语义目录与 `rm_test/app/*` 稳定头入口，active 主链路 include 已切换到 domain 前缀。
-- `app/channels` 实体文件已迁移到 `app/channels`；当前 `app/channels` 仅保留迁移说明。
-- `app/services` 实体文件已迁移到 `app/services`；当前 `app/services` 仅保留迁移说明。
-- `app/modules` 实体文件已迁移到 `app/modules`；当前 `app/modules` 仅保留迁移说明。
-- `app/protocols` 实体文件已迁移到 `app/protocols`；当前 `app/protocols` 仅保留迁移说明。
-- staged 模块已统一收敛到 `app/modules/staging/*`，active 与 staged 已物理分区。
+- 核心命名空间已迁移为顶层领域命名空间（如 `modules`、`channels`、`protocols`、`services`）。
+- `core` 已彻底删除（无兼容层残留），统一使用 `modules/*`、`channels/*` 等根目录头路径。
+- 已去掉外层 `app/` 物理目录，语义目录直接位于应用根目录。
+- staged 模块已统一收敛到 `modules/staging/*`，active 与 staged 已物理分区。
 - 算法目录已完成当前轮次去重：移除 MahonyAHRS 占位重复文件与空壳 orientation 目录，并新增 `tools/algorithms_dedupe_audit.sh` 审计脚本。
 - 平台历史资产已建立 `platform/legacy/*` 归档分区；`legacy_dm_h723` 已归档到 `platform/legacy/board/legacy_dm_h723`。
 
@@ -55,7 +51,7 @@ rm_test 已经不是“仅骨架”阶段，而是“主干可运行 + 分层已
 
 默认构建已接入：
 - modules：remote_input、chassis
-- services：actuator、chassis_tuning
+- services：chassis_tuning
 - channels：system_status、chassis_command、chassis_state、remote_input、motor_feedback
 - protocols/motors：dji、dm、cubemars（按具体协议直接接入）
 - algorithms：alg_pid、alg_math
@@ -106,7 +102,7 @@ P1（下一阶段）：
 
 P2（演进）：
 4. include 可见范围收敛
-- 已完成第二步：已移除 `platform/drivers/communication`、`platform/storage/filesystem`、`app` 直曝 include 目录；上层 include 已迁移到 `rm_test/platform/...` 与 `rm_test/app/...` 稳定前缀。
+- 已完成第二步：上层 include 已迁移到应用根目录下的领域前缀（如 `modules/...`、`channels/...`、`platform/...`）。
 
 5. 回归测试与回放资产补齐
 - 已完成第一步：新增最小 smoke 回归脚本 `applications/rm_test/tools/smoke_regression.sh`（文档见 `applications/rm_test/docs/SMOKE_REGRESSION.md`）；后续仍需补齐行为一致性回放与实机时序测试。
@@ -134,7 +130,7 @@ P2（演进）：
 ## 8. 不要再按旧结论行动
 
 以下旧结论已不成立：
-- “app/modules 与 app/protocols 尚未接入默认构建”
+- “modules 与 protocols 尚未接入默认构建”
 - “模块还需要通过注册表拉起”
 - “chassis 仍直接调用 can_dispatch”
 

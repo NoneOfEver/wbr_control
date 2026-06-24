@@ -5,8 +5,8 @@
 
 #include <zephyr/sys/printk.h>
 
-#include <app/modules/thread_utils.h>
-#include <app/modules/gimbal/gimbal_module.h>
+#include <modules/thread_utils.h>
+#include <modules/gimbal/gimbal_module.h>
 #include <platform/drivers/devices/actuators/serial_servo.h>
 
 namespace {
@@ -17,13 +17,13 @@ constexpr uint32_t kBaselineTracePeriod = 500U;
 
 }  // namespace
 
-namespace rm_test::app::modules::gimbal {
+namespace modules::gimbal {
 
 int GimbalModule::Initialize()
 {
 	started_ = false;
 	servo_ready_ =
-		(rm_test::platform::drivers::devices::actuators::serial_servo::Initialize() == 0);
+		(platform::drivers::devices::actuators::serial_servo::Initialize() == 0);
 	servo_stopped_ = false;
 	yaw_servo_online_ = false;
 	pitch_servo_online_ = false;
@@ -42,19 +42,19 @@ int GimbalModule::Initialize()
 
 	if (servo_ready_) {
 		uint8_t found = 0U;
-		if (rm_test::platform::drivers::devices::actuators::serial_servo::ReadId(
+		if (platform::drivers::devices::actuators::serial_servo::ReadId(
 			    yaw_servo_id_, &found, 120U) == 0) {
 			yaw_servo_id_ = found;
 			yaw_servo_online_ = true;
 		}
-		if (rm_test::platform::drivers::devices::actuators::serial_servo::ReadId(
+		if (platform::drivers::devices::actuators::serial_servo::ReadId(
 			    pitch_servo_id_, &found, 120U) == 0) {
 			pitch_servo_id_ = found;
 			pitch_servo_online_ = true;
 		}
 
 		if (!yaw_servo_online_ && !pitch_servo_online_) {
-			if (rm_test::platform::drivers::devices::actuators::serial_servo::ReadId(
+			if (platform::drivers::devices::actuators::serial_servo::ReadId(
 				    0xFEU, &found, 200U) == 0) {
 				yaw_servo_id_ = found;
 				yaw_servo_online_ = true;
@@ -70,7 +70,7 @@ int GimbalModule::Start()
 		return 0;
 	}
 
-	::rm_test::app::modules::StartMemberThread<GimbalModule, &GimbalModule::RunLoop>(
+	::modules::StartMemberThread<GimbalModule, &GimbalModule::RunLoop>(
 		&thread_,
 		g_gimbal_module_stack,
 		K_THREAD_STACK_SIZEOF(g_gimbal_module_stack),
@@ -124,10 +124,10 @@ void GimbalModule::RunLoop()
 			if (command_enable_ == 0U) {
 				if (!servo_stopped_) {
 					if (yaw_servo_online_) {
-						(void)rm_test::platform::drivers::devices::actuators::serial_servo::Stop(yaw_servo_id_);
+						(void)platform::drivers::devices::actuators::serial_servo::Stop(yaw_servo_id_);
 					}
 					if (pitch_servo_online_) {
-						(void)rm_test::platform::drivers::devices::actuators::serial_servo::Stop(pitch_servo_id_);
+						(void)platform::drivers::devices::actuators::serial_servo::Stop(pitch_servo_id_);
 					}
 					servo_stopped_ = true;
 					yaw_sent_once_ = false;
@@ -143,7 +143,7 @@ void GimbalModule::RunLoop()
 						if (!yaw_sent_once_ ||
 						    (std::fabs(yaw_servo_angle - yaw_last_sent_angle_deg_) >=
 						     kServoAngleEpsilonDeg)) {
-							(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
+							(void)platform::drivers::devices::actuators::serial_servo::MoveToAngle(
 								yaw_servo_id_,
 								yaw_servo_angle,
 								kServoMoveTimeMs);
@@ -156,7 +156,7 @@ void GimbalModule::RunLoop()
 						if (!pitch_sent_once_ ||
 						    (std::fabs(pitch_servo_angle - pitch_last_sent_angle_deg_) >=
 						     kServoAngleEpsilonDeg)) {
-							(void)rm_test::platform::drivers::devices::actuators::serial_servo::MoveToAngle(
+							(void)platform::drivers::devices::actuators::serial_servo::MoveToAngle(
 								pitch_servo_id_,
 								pitch_servo_angle,
 								kServoMoveTimeMs);
@@ -192,4 +192,4 @@ void GimbalModule::RunLoop()
 	}
 }
 
-}  // namespace rm_test::app::modules::gimbal
+}  // namespace modules::gimbal

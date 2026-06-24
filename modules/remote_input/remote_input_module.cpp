@@ -10,10 +10,10 @@
 
 #include <zephyr/sys/printk.h>
 
-#include <app/modules/remote_input/remote_input_module.h>
-#include <app/modules/thread_utils.h>
-#include <app/protocols/remote_input/dr16_protocol.h>
-#include <app/protocols/remote_input/vt03_protocol.h>
+#include <modules/remote_input/remote_input_module.h>
+#include <modules/thread_utils.h>
+#include <protocols/remote_input/dr16_protocol.h>
+#include <protocols/remote_input/vt03_protocol.h>
 
 namespace {
 
@@ -21,7 +21,7 @@ K_THREAD_STACK_DEFINE(g_remote_input_module_stack, 1024);
 
 }  // namespace
 
-namespace rm_test::app::modules::remote_input {
+namespace modules::remote_input {
 
 int RemoteInputModule::Initialize()
 {
@@ -41,7 +41,7 @@ int RemoteInputModule::Start()
 		return 0;
 	}
 
-	::rm_test::app::modules::StartMemberThread<RemoteInputModule, &RemoteInputModule::RunLoop>(
+	::modules::StartMemberThread<RemoteInputModule, &RemoteInputModule::RunLoop>(
 		&thread_,
 		g_remote_input_module_stack,
 		K_THREAD_STACK_SIZEOF(g_remote_input_module_stack),
@@ -390,4 +390,4 @@ channels::GantryCommandMessage RemoteInputModule::ComposeGantryCommand(
 	return command;
 }
 
-}  // namespace rm_test::app::modules::remote_input
+}  // namespace modules::remote_input
