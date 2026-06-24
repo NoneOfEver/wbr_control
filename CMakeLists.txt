@@ -38,5 +38,10 @@ target_sources(app PRIVATE
   src/main.cpp
 )
 
-add_subdirectory(app)
+add_subdirectory(services)
+add_subdirectory(modules)
+add_subdirectory(algorithms)
+add_subdirectory(channels)
+add_subdirectory(protocols)
+add_subdirectory(debug)
 add_subdirectory(platform)

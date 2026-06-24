@@ -14,7 +14,6 @@
 
 namespace {
 
-constexpr int kThreadPrio = 8;
 constexpr uint8_t kBusCount = 3U;
 constexpr uint16_t kDjiId1 = 0x201;
 constexpr uint16_t kDjiId2 = 0x202;
@@ -25,29 +24,8 @@ constexpr uint16_t kDmId2 = 0x012;
 constexpr uint16_t kDmId3 = 0x013;
 constexpr uint16_t kCubemarsBroadcastId = 0x000;
 
-struct CanRxEvent {
-	uint8_t bus;
-	uint16_t can_id;
-	uint8_t dlc;
-	uint8_t data[8];
-};
-
-K_THREAD_STACK_DEFINE(g_can_dispatch_stack, 1024);
-K_MSGQ_DEFINE(g_can_rx_msgq, sizeof(CanRxEvent), 16, 4);
-
-struct k_thread g_can_dispatch_thread;
 const struct device *g_can_dev[kBusCount] = {nullptr, nullptr, nullptr};
 bool g_started = false;
-
-int BusToIndex(rm_test::platform::drivers::communication::can_dispatch::CanBus bus)
-{
-	const uint8_t raw = static_cast<uint8_t>(bus);
-	if ((raw < 1U) || (raw > kBusCount)) {
-		return -1;
-	}
-
-	return static_cast<int>(raw - 1U);
-}
 
 const struct device *FindCanDeviceForBus(uint8_t bus)
 {
@@ -85,40 +63,46 @@ const struct device *FindCanDeviceForBus(uint8_t bus)
 	return nullptr;
 }
 
-void RouteCanFrameToModuleQueues(const CanRxEvent &event)
+void RouteCanFrameToModuleQueues(uint8_t bus, const struct can_frame *rx_frame)
 {
-	rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
-	frame.bus = event.bus;
-	frame.can_id = event.can_id;
-	frame.dlc = event.dlc;
-	for (uint8_t i = 0U; i < 8U; ++i) {
-		frame.data[i] = event.data[i];
+	if (rx_frame == nullptr) {
+		return;
 	}
 
-	if (event.bus == 1U) {
-		if ((event.can_id >= kDjiId1) && (event.can_id <= kDjiId4)) {
+	rm_test::app::channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
+	frame.bus = bus;
+	frame.can_id = static_cast<uint16_t>(rx_frame->id);
+	frame.dlc = rx_frame->dlc;
+
+	const uint8_t copy_len = (rx_frame->dlc > 8U) ? 8U : rx_frame->dlc;
+	for (uint8_t i = 0U; i < copy_len; ++i) {
+		frame.data[i] = rx_frame->data[i];
+	}
+
+	if (bus == 1U) {
+		if ((frame.can_id >= kDjiId1) && (frame.can_id <= kDjiId4)) {
 			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForChassis(&frame);
 		}
-		if (event.can_id == kCubemarsBroadcastId) {
+		if (frame.can_id == kCubemarsBroadcastId) {
 			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForGantry(&frame);
 		}
 		return;
 	}
 
-	if (event.bus == 2U) {
-		if ((event.can_id == kCubemarsBroadcastId) || (event.can_id == 0x201U) ||
-		    (event.can_id == 0x202U)) {
+	if (bus == 2U) {
+		if ((frame.can_id == kCubemarsBroadcastId) || (frame.can_id == 0x201U) ||
+		    (frame.can_id == 0x202U)) {
 			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForGantry(&frame);
 		}
 		return;
 	}
 
-	if (event.bus == 3U) {
-		if ((event.can_id == kDmId1) || (event.can_id == kDmId2) || (event.can_id == kDmId3) ||
-		    (event.can_id == 0x202U) || (event.can_id == 0x203U)) {
+	if (bus == 3U) {
+		if ((frame.can_id == kDmId1) || (frame.can_id == kDmId2) || (frame.can_id == kDmId3) ||
+		    (frame.can_id == 0x202U) || (frame.can_id == 0x203U)) {
 			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForArm(&frame);
 		}
-		if (event.can_id == 0x201U) {
+		if (frame.can_id == 0x201U) {
 			(void)rm_test::app::channels::can_raw_frame_queue::EnqueueForGantry(&frame);
 		}
 	}
@@ -132,31 +116,8 @@ void CanRxCallback(const struct device *dev, struct can_frame *frame, void *user
 		return;
 	}
 
-	CanRxEvent event = {};
-	event.bus = static_cast<uint8_t>(reinterpret_cast<uintptr_t>(user_data));
-	event.can_id = static_cast<uint16_t>(frame->id);
-	event.dlc = frame->dlc;
-
-	const uint8_t copy_len = (frame->dlc > 8U) ? 8U : frame->dlc;
-	for (uint8_t i = 0U; i < copy_len; ++i) {
-		event.data[i] = frame->data[i];
-	}
-
-	(void)k_msgq_put(&g_can_rx_msgq, &event, K_NO_WAIT);
-}
-
-void CanDispatchThreadMain()
-{
-	printk("can_dispatch started\n");
-
-	while (true) {
-		CanRxEvent event = {};
-		if (k_msgq_get(&g_can_rx_msgq, &event, K_FOREVER) != 0) {
-			continue;
-		}
-
-		RouteCanFrameToModuleQueues(event);
-	}
+	const uint8_t bus = static_cast<uint8_t>(reinterpret_cast<uintptr_t>(user_data));
+	RouteCanFrameToModuleQueues(bus, frame);
 }
 
 int AddDefaultFilters(const struct device *dev, uint8_t bus)
@@ -227,55 +188,8 @@ int Initialize()
 		return -ENODEV;
 	}
 
-	k_thread_create(&g_can_dispatch_thread,
-			g_can_dispatch_stack,
-			K_THREAD_STACK_SIZEOF(g_can_dispatch_stack),
-			[](void *p1, void *p2, void *p3) {
-				ARG_UNUSED(p1);
-				ARG_UNUSED(p2);
-				ARG_UNUSED(p3);
-				CanDispatchThreadMain();
-			},
-			nullptr,
-			nullptr,
-			nullptr,
-			K_PRIO_PREEMPT(kThreadPrio),
-			0,
-			K_NO_WAIT);
-
-	k_thread_name_set(&g_can_dispatch_thread, "can_dispatch");
 	g_started = true;
 	return 0;
 }
 
-int SendStdData(uint16_t can_id, const uint8_t data[8], uint8_t dlc)
-{
-	return SendStdDataOnBus(CanBus::kCan3, can_id, data, dlc);
-}
-
-int SendStdDataOnBus(CanBus bus, uint16_t can_id, const uint8_t data[8], uint8_t dlc)
-{
-	if ((data == nullptr) || (dlc > 8U)) {
-		return -EINVAL;
-	}
-
-	const int idx = BusToIndex(bus);
-	if (idx < 0) {
-		return -EINVAL;
-	}
-
-	if (g_can_dev[idx] == nullptr) {
-		return -ENODEV;
-	}
-
-	struct can_frame frame = {};
-	frame.flags = 0U;
-	frame.id = can_id;
-	frame.dlc = dlc;
-	for (uint8_t i = 0U; i < dlc; ++i) {
-		frame.data[i] = data[i];
-	}
-
-	return can_send(g_can_dev[idx], &frame, K_NO_WAIT, nullptr, nullptr);
-}
 }  // namespace rm_test::platform::drivers::communication::can_dispatch

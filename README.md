@@ -42,7 +42,7 @@ remote_input_module 解析并发布 zbus channel
     ↓
 chassis_module 订阅并计算，发布底盘指令
     ↓
-actuator_service 转换为 CAN 帧下发到电机
+module 直接编码并调用 CAN 原生发送接口下发到电机
 ```
 
 ---

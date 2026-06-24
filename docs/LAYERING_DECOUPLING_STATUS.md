@@ -55,19 +55,20 @@
 收益：
 - 启动顺序仍集中可控，入口能直接看到完整初始化流程。
 
-### 2.3 业务执行路径解耦（chassis -> actuator -> platform）
+### 2.3 业务执行路径简化（module -> native bus API）
 
 已完成：
-- chassis 模块不再直接发送 CAN 帧。
-- 电机下发通过 actuator service 中转。
+- actuator service 与 can_dispatch 发送包装已移除。
+- chassis/arm/gantry 模块直接编码协议帧，并调用 Zephyr `can_send()`。
+- UART 发送路径保持直接调用 `uart_poll_out()`，未额外保留发送包装。
 
 关键落点：
 - app/modules/chassis/chassis_module.cpp
-- app/services/actuator/actuator_service.h
-- app/services/actuator/actuator_service.cpp
+- app/modules/arm/arm_module.cpp
+- app/modules/gantry/gantry_module.cpp
 
 收益：
-- 业务层与总线发送 API 解绑，后续可在 service 层替换执行后端。
+- 发送路径更直观，module 内能直接看到协议编码与总线发送行为。
 
 ### 2.4 调参与业务模块解耦（shell -> service -> provider）
 
@@ -121,10 +122,10 @@
 
 ### P1（其次）
 
-3. actuator service 抽象提升
-- 状态：进行中（已完成第三步，2026-04-05）。
-- 实现：新增通用接口 `SendMotorCurrent(group, current_cmd)`；服务内部改为分发表分发，当前支持 `kDji0x200` 与 `kDji0x1ff` 两个执行组；兼容包装接口保留。
-- 后续：继续扩展到非 DJI 协议族，并逐步收敛服务层内部协议分发。
+3. 发送包装收敛
+- 状态：已完成。
+- 实现：移除 actuator service 与 `can_dispatch::SendStdData*`，CAN 发送由 module 直接构造 `can_frame` 并调用 `can_send()`。
+- 后续：若需要复用，可优先抽取协议编码工具，而不是重新引入底层发送包装。
 
 4. tuning service 生命周期完善
 - 状态：已完成（2026-04-05）。
@@ -159,9 +160,8 @@
 
 ## 5. 建议的下一步顺序
 
-1. 继续提升 actuator service 抽象层级（P1-3），扩展更多执行组/协议族。
-2. 继续完善 tuning service provider 生命周期（P1-4），如需多 provider 则升级 registry。
-3. 最后做 include 边界收敛与测试资产补齐（P2）。
+1. 继续完善 tuning service provider 生命周期（P1-4），如需多 provider 则升级 registry。
+2. 最后做 include 边界收敛与测试资产补齐（P2）。
 
 ---
 

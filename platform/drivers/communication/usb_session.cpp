@@ -9,6 +9,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
+#include <app/channels/usb_raw_frame_queue.h>
+
 #include "usbd_core.h"
 #include "usbd_cdc_acm.h"
 
@@ -33,17 +35,9 @@ constexpr bool kHasUsbNode = false;
 constexpr uint8_t kCdcInEp = 0x81U;
 constexpr uint8_t kCdcOutEp = 0x01U;
 constexpr uint8_t kCdcIntEp = 0x83U;
-constexpr size_t kCdcBufferSize = 512U;
-constexpr size_t kRxQueueDepth = 16U;
+constexpr size_t kCdcBufferSize = rm_test::app::channels::usb_raw_frame_queue::kUsbRawChunkSize;
 
 #define RM_TEST_USB_CONFIG_SIZE (9 + CDC_ACM_DESCRIPTOR_LEN)
-
-struct UsbRxChunk {
-	uint16_t len;
-	uint8_t data[kCdcBufferSize];
-};
-
-K_MSGQ_DEFINE(g_usb_rx_msgq, sizeof(UsbRxChunk), kRxQueueDepth, 4);
 
 USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t g_read_buffer[2][kCdcBufferSize];
 uint8_t g_tx_buffer[kCdcBufferSize];
@@ -197,10 +191,10 @@ void UsbBulkOutCallback(uint8_t busid, uint8_t ep, uint32_t nbytes)
 	const size_t copy_len = MIN(static_cast<size_t>(nbytes), kCdcBufferSize);
 
 	if (copy_len > 0U) {
-		UsbRxChunk chunk = {};
-		chunk.len = static_cast<uint16_t>(copy_len);
-		memcpy(chunk.data, &g_read_buffer[index][0], copy_len);
-		(void)k_msgq_put(&g_usb_rx_msgq, &chunk, K_NO_WAIT);
+		rm_test::app::channels::usb_raw_frame_queue::UsbRawFrameMessage frame = {};
+		frame.len = static_cast<uint16_t>(copy_len);
+		memcpy(frame.data, &g_read_buffer[index][0], copy_len);
+		(void)rm_test::app::channels::usb_raw_frame_queue::EnqueueForCdcAcm(&frame);
 	}
 
 	g_read_index = (index == 0U) ? 1U : 0U;
@@ -331,15 +325,8 @@ int Receive(uint8_t *out, size_t capacity, size_t *out_len, int32_t timeout_ms)
 #if defined(CONFIG_CHERRYUSB) && CONFIG_CHERRYUSB && defined(CONFIG_CHERRYUSB_DEVICE) &&                 \
 	CONFIG_CHERRYUSB_DEVICE && defined(CONFIG_CHERRYUSB_DEVICE_CDC_ACM) &&                             \
 	CONFIG_CHERRYUSB_DEVICE_CDC_ACM
-	k_timeout_t timeout = K_NO_WAIT;
-	if (timeout_ms < 0) {
-		timeout = K_FOREVER;
-	} else if (timeout_ms > 0) {
-		timeout = K_MSEC(timeout_ms);
-	}
-
-	UsbRxChunk chunk = {};
-	const int rc = k_msgq_get(&g_usb_rx_msgq, &chunk, timeout);
+	rm_test::app::channels::usb_raw_frame_queue::UsbRawFrameMessage chunk = {};
+	const int rc = rm_test::app::channels::usb_raw_frame_queue::DequeueForCdcAcm(&chunk, timeout_ms);
 	if (rc != 0) {
 		return rc;
 	}

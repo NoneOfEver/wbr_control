@@ -5,13 +5,19 @@
 #include <math.h>
 
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/util.h>
 
 #include <app/modules/thread_utils.h>
 #include <app/modules/arm/arm_module.h>
 #include <app/protocols/motors/dm_motor_protocol.h>
 #include <app/protocols/motors/dji_motor_protocol.h>
-#include <app/services/actuator/actuator_service.h>
-#include <platform/drivers/communication/can_dispatch.h>
+
+#if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/can.h>
+#include <zephyr/kernel.h>
+#endif
 
 namespace {
 
@@ -26,17 +32,50 @@ constexpr uint16_t kWristMotorCanId[2] = {0x202, 0x203};
 int SendDmFrameOnCan3(uint16_t can_id, const uint8_t *data, uint8_t dlc)
 {
 #if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
-	return rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
-		rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan3,
-		can_id,
-		data,
-		dlc);
+	if ((data == nullptr) || (dlc > 8U)) {
+		return -EINVAL;
+	}
+
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(can3), okay)
+	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(can3));
+	if (!device_is_ready(dev)) {
+		return -ENODEV;
+	}
+
+	struct can_frame frame = {};
+	frame.flags = 0U;
+	frame.id = can_id;
+	frame.dlc = dlc;
+	for (uint8_t i = 0U; i < dlc; ++i) {
+		frame.data[i] = data[i];
+	}
+
+	return can_send(dev, &frame, K_NO_WAIT, nullptr, nullptr);
+#else
+	return -ENODEV;
+#endif
 #else
 	ARG_UNUSED(can_id);
 	ARG_UNUSED(data);
 	ARG_UNUSED(dlc);
 	return -ENOTSUP;
 #endif
+}
+
+int SendDjiCurrent0x200OnCan3(const int16_t current_cmd[4])
+{
+	if (current_cmd == nullptr) {
+		return -EINVAL;
+	}
+
+	uint8_t frame[8] = {0U};
+	const int encode_rc =
+		rm_test::app::protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
+	if (encode_rc != 0) {
+		return encode_rc;
+	}
+
+	return SendDmFrameOnCan3(0x200U, frame, 8U);
 }
 
 int SendDmMitCommand(uint16_t can_id, float position, float kp, float kd)
@@ -284,10 +323,7 @@ void ArmModule::ApplyWristSpeedPidAndSend()
 	}
 	k_mutex_unlock(&pid_mutex_);
 
-	(void)rm_test::app::services::actuator::SendMotorCurrent(
-		rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan3,
-		rm_test::app::services::actuator::MotorCurrentGroup::kDji0x200,
-		current_cmd);
+	(void)SendDjiCurrent0x200OnCan3(current_cmd);
 }
 
 void ArmModule::RunLoop()

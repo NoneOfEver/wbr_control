@@ -27,7 +27,7 @@ rm_test 已经不是“仅骨架”阶段，而是“主干可运行 + 分层已
 分层结构：
 - src/main.cpp：启动编排
 - modules：remote_input、chassis 等业务模块
-- services：actuator、chassis_tuning
+- services：chassis_tuning
 - channels：zbus 消息主题
 - protocols：motors 协议编解码
 - platform：uart/can/littlefs 与板级封装
@@ -35,7 +35,7 @@ rm_test 已经不是“仅骨架”阶段，而是“主干可运行 + 分层已
 核心解耦状态：
 - main 按 Kconfig 条件直接初始化并启动模块，不再使用注册表。
 - main 按 Kconfig 条件直接初始化 UART/CAN/USB/LittleFS 基础设施。
-- chassis 已通过 actuator service 下发，不再在业务层直接调用 can_dispatch。
+- 模块发送路径已去掉 actuator/can_dispatch 包装，直接编码协议帧并调用原生 CAN/UART API。
 - shell 调参通过 chassis_tuning_service 与 provider 对接，不再通过模块全局桥接函数。
 
 结构迁移状态（阶段 B）：
@@ -101,10 +101,7 @@ P0（高优先）：
 - 仍建议后续检查 MIGRATION_PLAN 中“进行中”措辞，避免误导为骨架阶段。
 
 P1（下一阶段）：
-2. actuator service 抽象提升
-- 已完成通用接口与分发表改造第一阶段，当前已覆盖 DJI 0x200 与 0x1FF 两组；后续可继续扩展到更多执行组/协议族。
-
-3. chassis_tuning provider 生命周期完善
+2. chassis_tuning provider 生命周期完善
 - 已完成：服务已升级为多 provider registry，支持按名称/优先级注册并选择 active provider；shell 可观测 active provider 名称/优先级/数量。
 
 P2（演进）：

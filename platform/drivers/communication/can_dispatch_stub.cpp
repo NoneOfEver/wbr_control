@@ -4,8 +4,6 @@
 
 #include <errno.h>
 
-#include <zephyr/sys/util.h>
-
 #include <platform/drivers/communication/can_dispatch.h>
 
 namespace rm_test::platform::drivers::communication::can_dispatch {
@@ -14,23 +12,6 @@ namespace rm_test::platform::drivers::communication::can_dispatch {
 
 int Initialize()
 {
-	return -ENOTSUP;
-}
-
-int SendStdData(uint16_t can_id, const uint8_t data[8], uint8_t dlc)
-{
-	ARG_UNUSED(can_id);
-	ARG_UNUSED(data);
-	ARG_UNUSED(dlc);
-	return -ENOTSUP;
-}
-
-int SendStdDataOnBus(CanBus bus, uint16_t can_id, const uint8_t data[8], uint8_t dlc)
-{
-	ARG_UNUSED(bus);
-	ARG_UNUSED(can_id);
-	ARG_UNUSED(data);
-	ARG_UNUSED(dlc);
 	return -ENOTSUP;
 }
 

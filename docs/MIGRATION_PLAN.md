@@ -47,9 +47,9 @@
 
 ### P1（高优先）
 
-1. actuator service 抽象继续扩展
-- 现状：已支持 kDji0x200、kDji0x1ff。
-- 剩余：扩展更多协议族（非 DJI）与对应执行组。
+1. 发送路径后续收敛
+- 现状：actuator service 与 CAN 发送包装已移除，module 直接调用原生 CAN/UART 发送 API。
+- 剩余：按需补齐协议编码测试，避免发送路径再次漂移。
 
 2. tuning service 多 provider 演进（按需）
 - 现状：单 provider 生命周期已完善（register/unregister/status）。

@@ -1,17 +1,24 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <algorithm>
+#include <errno.h>
 
 #include <math.h>
 
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/util.h>
 
 #include <app/modules/thread_utils.h>
 #include <app/modules/gantry/gantry_module.h>
 #include <app/protocols/motors/cubemars_motor_protocol.h>
 #include <app/protocols/motors/dji_motor_protocol.h>
-#include <app/services/actuator/actuator_service.h>
-#include <platform/drivers/communication/can_dispatch.h>
+
+#if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/can.h>
+#include <zephyr/kernel.h>
+#endif
 
 namespace {
 
@@ -19,6 +26,76 @@ K_THREAD_STACK_DEFINE(g_gantry_module_stack, 1024);
 constexpr bool kBaselineTraceEnabled = false;
 constexpr uint32_t kBaselineTracePeriod = 500U;
 constexpr int kMaxFramesPerTick = 8;
+
+enum class LocalCanBus : uint8_t {
+	kCan1 = 1,
+	kCan2 = 2,
+	kCan3 = 3,
+};
+
+int SendCanStdFrame(LocalCanBus bus, uint16_t can_id, const uint8_t *data, uint8_t dlc)
+{
+#if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
+	if ((data == nullptr) || (dlc > 8U)) {
+		return -EINVAL;
+	}
+
+	const struct device *dev = nullptr;
+	switch (bus) {
+	case LocalCanBus::kCan1:
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(can1), okay)
+		dev = DEVICE_DT_GET(DT_NODELABEL(can1));
+#endif
+		break;
+	case LocalCanBus::kCan2:
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(can2), okay)
+		dev = DEVICE_DT_GET(DT_NODELABEL(can2));
+#endif
+		break;
+	case LocalCanBus::kCan3:
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(can3), okay)
+		dev = DEVICE_DT_GET(DT_NODELABEL(can3));
+#endif
+		break;
+	}
+
+	if ((dev == nullptr) || !device_is_ready(dev)) {
+		return -ENODEV;
+	}
+
+	struct can_frame frame = {};
+	frame.flags = 0U;
+	frame.id = can_id;
+	frame.dlc = dlc;
+	for (uint8_t i = 0U; i < dlc; ++i) {
+		frame.data[i] = data[i];
+	}
+
+	return can_send(dev, &frame, K_NO_WAIT, nullptr, nullptr);
+#else
+	ARG_UNUSED(bus);
+	ARG_UNUSED(can_id);
+	ARG_UNUSED(data);
+	ARG_UNUSED(dlc);
+	return -ENOTSUP;
+#endif
+}
+
+int SendDjiCurrent0x200(LocalCanBus bus, const int16_t current_cmd[4])
+{
+	if (current_cmd == nullptr) {
+		return -EINVAL;
+	}
+
+	uint8_t frame[8] = {0U};
+	const int encode_rc =
+		rm_test::app::protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
+	if (encode_rc != 0) {
+		return encode_rc;
+	}
+
+	return SendCanStdFrame(bus, 0x200U, frame, 8U);
+}
 
 float UIntToFloat(uint16_t raw, float min_value, float max_value, uint8_t bits)
 {
@@ -120,30 +197,14 @@ void GantryModule::SendCubemarsStartupSequence()
 {
 	uint8_t frame[8] = {0U};
 	if (rm_test::app::protocols::motors::cubemars::GetSaveZeroFrame(frame) == 0) {
-		(void)rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
-			rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan2,
-			kCubemarsCanId,
-			frame,
-			8U);
-		(void)rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
-			rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan1,
-			kCubemarsCanId,
-			frame,
-			8U);
+		(void)SendCanStdFrame(LocalCanBus::kCan2, kCubemarsCanId, frame, 8U);
+		(void)SendCanStdFrame(LocalCanBus::kCan1, kCubemarsCanId, frame, 8U);
 		k_sleep(K_MSEC(200));
 	}
 
 	if (rm_test::app::protocols::motors::cubemars::GetEnterFrame(frame) == 0) {
-		(void)rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
-			rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan2,
-			kCubemarsCanId,
-			frame,
-			8U);
-		(void)rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
-			rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan1,
-			kCubemarsCanId,
-			frame,
-			8U);
+		(void)SendCanStdFrame(LocalCanBus::kCan2, kCubemarsCanId, frame, 8U);
+		(void)SendCanStdFrame(LocalCanBus::kCan1, kCubemarsCanId, frame, 8U);
 		k_sleep(K_MSEC(200));
 	}
 }
@@ -223,20 +284,14 @@ void GantryModule::ApplyControlAndSend()
 		can2_current[1] = static_cast<int16_t>(
 			x_right_speed_pid_.update(-x_target_omega, static_cast<float>(x_right_feedback_.omega)));
 	}
-	(void)rm_test::app::services::actuator::SendMotorCurrent(
-		rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan2,
-		rm_test::app::services::actuator::MotorCurrentGroup::kDji0x200,
-		can2_current);
+	(void)SendDjiCurrent0x200(LocalCanBus::kCan2, can2_current);
 
 	int16_t can3_current[4] = {0, 0, 0, 0};
 	if (y_feedback_.valid) {
 		can3_current[0] = static_cast<int16_t>(
 			y_speed_pid_.update(y_target_omega, static_cast<float>(y_feedback_.omega)));
 	}
-	(void)rm_test::app::services::actuator::SendMotorCurrent(
-		rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan3,
-		rm_test::app::services::actuator::MotorCurrentGroup::kDji0x200,
-		can3_current);
+	(void)SendDjiCurrent0x200(LocalCanBus::kCan3, can3_current);
 
 	const float z_target_left_angle = -(z_axis_virtual_distance_ * kZAxisRadPerDistance);
 	const float z_target_right_angle = +(z_axis_virtual_distance_ * kZAxisRadPerDistance);
@@ -281,18 +336,10 @@ void GantryModule::ApplyControlAndSend()
 
 	uint8_t z_frame[8] = {0U};
 	if (rm_test::app::protocols::motors::cubemars::PackMitCommand(&left_cmd, &z_range, z_frame) == 0) {
-		(void)rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
-			rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan2,
-			kCubemarsCanId,
-			z_frame,
-			8U);
+		(void)SendCanStdFrame(LocalCanBus::kCan2, kCubemarsCanId, z_frame, 8U);
 	}
 	if (rm_test::app::protocols::motors::cubemars::PackMitCommand(&right_cmd, &z_range, z_frame) == 0) {
-		(void)rm_test::platform::drivers::communication::can_dispatch::SendStdDataOnBus(
-			rm_test::platform::drivers::communication::can_dispatch::CanBus::kCan1,
-			kCubemarsCanId,
-			z_frame,
-			8U);
+		(void)SendCanStdFrame(LocalCanBus::kCan1, kCubemarsCanId, z_frame, 8U);
 	}
 }
 

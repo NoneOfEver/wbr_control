@@ -23,31 +23,15 @@ namespace {
 
 #if defined(CONFIG_UART_ASYNC_API) && CONFIG_UART_ASYNC_API
 constexpr size_t kUartRxBufSize = 128;
-#endif
-constexpr int kThreadPrio = 8;
-#if defined(CONFIG_UART_ASYNC_API) && CONFIG_UART_ASYNC_API
 constexpr int32_t kRxIdleTimeoutUs = 1000;
 #endif
 
-K_THREAD_STACK_DEFINE(g_uart_dispatch_stack, 1024);
-
-#if defined(CONFIG_UART_ASYNC_API) && CONFIG_UART_ASYNC_API
-struct UartRxChunk {
-	uint8_t len;
-	uint8_t data[rm_test::app::channels::uart_raw_frame_queue::kUartRawChunkSize];
-};
-
-K_MSGQ_DEFINE(g_uart_rx_msgq, sizeof(UartRxChunk), 32, 4);
-#endif
-
-struct k_thread g_uart_dispatch_thread;
 const struct device *g_uart_dev = nullptr;
 bool g_started = false;
 
 #if defined(CONFIG_UART_ASYNC_API) && CONFIG_UART_ASYNC_API
 uint8_t g_uart_rx_buf_a[kUartRxBufSize];
 uint8_t g_uart_rx_buf_b[kUartRxBufSize];
-#endif
 
 void RouteUartBytesToModuleQueues(const uint8_t *data, size_t len)
 {
@@ -65,14 +49,12 @@ void RouteUartBytesToModuleQueues(const uint8_t *data, size_t len)
 		msg.len = static_cast<uint8_t>(step);
 		memcpy(msg.data, data + offset, step);
 		offset += step;
-
 		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForRemoteInput(&msg);
 		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForReferee(&msg);
 		(void)rm_test::app::channels::uart_raw_frame_queue::EnqueueForMavlink(&msg);
 	}
 }
 
-#if defined(CONFIG_UART_ASYNC_API) && CONFIG_UART_ASYNC_API
 void UartRxCallback(const struct device *dev, struct uart_event *evt, void *user_data)
 {
 	ARG_UNUSED(dev);
@@ -81,21 +63,7 @@ void UartRxCallback(const struct device *dev, struct uart_event *evt, void *user
 	switch (evt->type) {
 	case UART_RX_RDY: {
 		const uint8_t *src = evt->data.rx.buf + evt->data.rx.offset;
-		size_t remain = evt->data.rx.len;
-
-		while (remain > 0U) {
-			UartRxChunk chunk = {};
-			const size_t step =
-				(remain > rm_test::app::channels::uart_raw_frame_queue::kUartRawChunkSize)
-					? rm_test::app::channels::uart_raw_frame_queue::kUartRawChunkSize
-					: remain;
-			chunk.len = static_cast<uint8_t>(step);
-			memcpy(chunk.data, src, step);
-			(void)k_msgq_put(&g_uart_rx_msgq, &chunk, K_NO_WAIT);
-
-			src += step;
-			remain -= step;
-		}
+		RouteUartBytesToModuleQueues(src, evt->data.rx.len);
 		break;
 	}
 	case UART_RX_BUF_REQUEST: {
@@ -116,29 +84,6 @@ void UartRxCallback(const struct device *dev, struct uart_event *evt, void *user
 	}
 }
 #endif
-
-void UartDispatchThreadMain()
-{
-	printk("uart_dispatch started\n");
-
-	while (true) {
-#if defined(CONFIG_UART_ASYNC_API) && CONFIG_UART_ASYNC_API
-		UartRxChunk chunk = {};
-		if (k_msgq_get(&g_uart_rx_msgq, &chunk, K_FOREVER) != 0) {
-			continue;
-		}
-
-		RouteUartBytesToModuleQueues(chunk.data, chunk.len);
-#else
-		uint8_t ch = 0U;
-		if (uart_poll_in(g_uart_dev, &ch) == 0) {
-			RouteUartBytesToModuleQueues(&ch, 1U);
-		} else {
-			k_sleep(K_MSEC(1));
-		}
-#endif
-	}
-}
 
 }  // namespace
 
@@ -172,25 +117,11 @@ int Initialize()
 			   kRxIdleTimeoutUs) != 0) {
 		return -EIO;
 	}
+#else
+	printk("uart_dispatch skipped: async UART API disabled\n");
+	g_started = true;
+	return 0;
 #endif
-
-	k_thread_create(&g_uart_dispatch_thread,
-			g_uart_dispatch_stack,
-			K_THREAD_STACK_SIZEOF(g_uart_dispatch_stack),
-			[](void *p1, void *p2, void *p3) {
-				ARG_UNUSED(p1);
-				ARG_UNUSED(p2);
-				ARG_UNUSED(p3);
-				UartDispatchThreadMain();
-			},
-			nullptr,
-			nullptr,
-			nullptr,
-			K_PRIO_PREEMPT(kThreadPrio),
-			0,
-			K_NO_WAIT);
-
-	k_thread_name_set(&g_uart_dispatch_thread, "uart_dispatch");
 	g_started = true;
 	return 0;
 }
