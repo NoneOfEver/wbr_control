@@ -2,9 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RM_TEST_PLATFORM_DRIVERS_COMMUNICATION_USB_SESSION_H_
-#define RM_TEST_PLATFORM_DRIVERS_COMMUNICATION_USB_SESSION_H_
-
+#pragma once
 #include <stddef.h>
 #include <stdint.h>
 
@@ -17,4 +15,3 @@ int Receive(uint8_t *out, size_t capacity, size_t *out_len, int32_t timeout_ms);
 
 }  // namespace platform::drivers::communication::usb_session
 
-#endif /* RM_TEST_PLATFORM_DRIVERS_COMMUNICATION_USB_SESSION_H_ */

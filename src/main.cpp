@@ -9,9 +9,7 @@
 #include <zephyr/sys/printk.h>
 
 #include <channels/system_status_channel.h>
-#include <modules/arm/arm_module.h>
 #include <modules/chassis/chassis_module.h>
-#include <modules/gantry/gantry_module.h>
 #include <modules/gimbal/gimbal_module.h>
 #include <modules/referee/referee_module.h>
 #include <modules/remote_input/remote_input_module.h>
@@ -39,9 +37,7 @@ namespace {
 modules::sys_state::SysStateModule g_sys_state_module;
 modules::remote_input::RemoteInputModule g_remote_input_module;
 modules::chassis::ChassisModule g_chassis_module;
-modules::arm::ArmModule g_arm_module;
 modules::gimbal::GimbalModule g_gimbal_module;
-modules::gantry::GantryModule g_gantry_module;
 modules::referee::RefereeModule g_referee_module;
 
 }  // namespace
@@ -137,28 +133,10 @@ int main(void)
 		++module_count;
 	}
 
-	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_ARM)) {
-		rc = g_arm_module.Initialize();
-		if (rc != 0) {
-			printk("module init failed: %s (%d)\n", g_arm_module.Name(), rc);
-			return rc;
-		}
-		++module_count;
-	}
-
 	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_GIMBAL)) {
 		rc = g_gimbal_module.Initialize();
 		if (rc != 0) {
 			printk("module init failed: %s (%d)\n", g_gimbal_module.Name(), rc);
-			return rc;
-		}
-		++module_count;
-	}
-
-	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_GANTRY)) {
-		rc = g_gantry_module.Initialize();
-		if (rc != 0) {
-			printk("module init failed: %s (%d)\n", g_gantry_module.Name(), rc);
 			return rc;
 		}
 		++module_count;
@@ -204,26 +182,10 @@ int main(void)
 		}
 	}
 
-	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_ARM)) {
-		rc = g_arm_module.Start();
-		if (rc != 0) {
-			printk("module start failed: %s (%d)\n", g_arm_module.Name(), rc);
-			return rc;
-		}
-	}
-
 	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_GIMBAL)) {
 		rc = g_gimbal_module.Start();
 		if (rc != 0) {
 			printk("module start failed: %s (%d)\n", g_gimbal_module.Name(), rc);
-			return rc;
-		}
-	}
-
-	if (IS_ENABLED(CONFIG_RM_TEST_MODULE_GANTRY)) {
-		rc = g_gantry_module.Start();
-		if (rc != 0) {
-			printk("module start failed: %s (%d)\n", g_gantry_module.Name(), rc);
 			return rc;
 		}
 	}

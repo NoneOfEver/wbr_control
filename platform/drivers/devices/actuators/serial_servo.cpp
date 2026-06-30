@@ -4,6 +4,7 @@
 
 #include <errno.h>
 
+#include <channels/serialservo_send_raw.hpp>
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
@@ -16,6 +17,9 @@ namespace {
 constexpr uint8_t kFrameHead = 0x55;
 const struct device *g_uart_dev = nullptr;
 bool g_initialized = false;
+bool g_tx_thread_started = false;
+k_thread g_tx_thread;
+K_THREAD_STACK_DEFINE(g_serial_servo_tx_stack, 1024);
 
 uint16_t AngleToRaw(float degrees)
 {
@@ -57,6 +61,57 @@ int SendPacket(uint8_t id, uint8_t cmd, const uint8_t *params, uint8_t params_le
 	}
 
 	return 0;
+}
+
+int SendMoveToAnglePacket(uint8_t id, float degrees, uint16_t time_ms)
+{
+	const uint16_t raw = AngleToRaw(degrees);
+	const uint8_t params[4] = {
+		static_cast<uint8_t>(raw & 0xffU),
+		static_cast<uint8_t>((raw >> 8) & 0xffU),
+		static_cast<uint8_t>(time_ms & 0xffU),
+		static_cast<uint8_t>((time_ms >> 8) & 0xffU),
+	};
+	return SendPacket(id, 1U, params, sizeof(params));
+}
+
+int SendStopPacket(uint8_t id)
+{
+	return SendPacket(id, 12U, nullptr, 0U);
+}
+
+void TxLoop(void *, void *, void *)
+{
+	SeqlockValue<SerialServoSendRawFrame> *const slots[] = {
+		&yaw_servo_send_raw,
+		&pitch_servo_send_raw,
+	};
+	uint32_t last_sequence[sizeof(slots) / sizeof(slots[0])] = {};
+
+	while (true) {
+		for (size_t i = 0U; i < (sizeof(slots) / sizeof(slots[0])); ++i) {
+			const uint32_t sequence = slots[i]->sequence();
+			if ((sequence == 0U) || (sequence == last_sequence[i])) {
+				continue;
+			}
+
+			SerialServoSendRawFrame value = {};
+			if (!slots[i]->read(value)) {
+				continue;
+			}
+			last_sequence[i] = sequence;
+
+			if ((value.valid == 0U) || (value.len > sizeof(value.data))) {
+				continue;
+			}
+
+			for (uint8_t j = 0U; j < value.len; ++j) {
+				uart_poll_out(g_uart_dev, value.data[j]);
+			}
+		}
+
+		k_sleep(K_MSEC(1));
+	}
 }
 
 int PollOneByte(uint8_t *out, int64_t deadline_ms)
@@ -166,24 +221,31 @@ int Initialize()
 	}
 
 	g_initialized = true;
+	if (!g_tx_thread_started) {
+		k_tid_t tid = k_thread_create(&g_tx_thread,
+					      g_serial_servo_tx_stack,
+					      K_THREAD_STACK_SIZEOF(g_serial_servo_tx_stack),
+					      TxLoop,
+					      nullptr,
+					      nullptr,
+					      nullptr,
+					      K_PRIO_PREEMPT(7),
+					      0,
+					      K_NO_WAIT);
+		k_thread_name_set(tid, "uart_servo_tx");
+		g_tx_thread_started = true;
+	}
 	return 0;
 }
 
 int MoveToAngle(uint8_t id, float degrees, uint16_t time_ms)
 {
-	const uint16_t raw = AngleToRaw(degrees);
-	const uint8_t params[4] = {
-		static_cast<uint8_t>(raw & 0xffU),
-		static_cast<uint8_t>((raw >> 8) & 0xffU),
-		static_cast<uint8_t>(time_ms & 0xffU),
-		static_cast<uint8_t>((time_ms >> 8) & 0xffU),
-	};
-	return SendPacket(id, 1U, params, sizeof(params));
+	return SendMoveToAnglePacket(id, degrees, time_ms);
 }
 
 int Stop(uint8_t id)
 {
-	return SendPacket(id, 12U, nullptr, 0U);
+	return SendStopPacket(id);
 }
 
 int SetSpeed(uint8_t id, int16_t speed)

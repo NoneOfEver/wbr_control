@@ -5,8 +5,7 @@
 
 #include <zephyr/kernel.h>
 
-#include <channels/gimbal_command_channel.h>
-#include <channels/gimbal_state_channel.h>
+#include <channels/remote_input_state.hpp>
 
 namespace modules::gimbal {
 
@@ -32,7 +31,7 @@ private:
 	static constexpr uint32_t kNoCommandStopTicks = 100U;
 
 	void RunLoop();
-	void HandleCommand(const channels::GimbalCommandMessage &command);
+	void HandleRemoteState(const channels::RemoteInputState &state);
 
 	struct k_thread thread_;
 	bool started_ = false;
@@ -52,6 +51,7 @@ private:
 	bool pitch_sent_once_ = false;
 	int64_t next_servo_send_ms_ = 0;
 	uint32_t state_sequence_ = 0U;
+	uint32_t last_remote_sequence_ = 0U;
 };
 
 }  // namespace modules::gimbal

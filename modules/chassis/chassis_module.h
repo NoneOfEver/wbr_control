@@ -2,65 +2,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RM_TEST_APP_MODULES_CHASSIS_CHASSIS_MODULE_H_
-#define RM_TEST_APP_MODULES_CHASSIS_CHASSIS_MODULE_H_
-
+#pragma once
 #include <zephyr/kernel.h>
 
-#include <channels/can_raw_frame_queue.h>
-#include <algorithms/control/alg_pid.h>
-#include <channels/chassis_command_channel.h>
-#include <channels/chassis_state_channel.h>
-#include <channels/motor_feedback_channel.h>
-#include <services/chassis/chassis_tuning_service.h>
-
+#include <modules/chassis/ground_balance_controller.h>
+#include <protocols/motors/dji_motor_protocol.h>
+#include <protocols/motors/dm_motor_protocol.h>
 namespace modules::chassis {
 
-class ChassisModule : public services::chassis_tuning::SpeedPidTuningProvider {
+class ChassisModule {
 public:
 	const char *Name() const { return "chassis"; }
 	int Initialize();
 	int Start();
 
-	int SetSpeedPidTuning(float kp, float ki, float kd, float i_limit, float out_limit);
-	int GetSpeedPidTuning(float *kp, float *ki, float *kd, float *i_limit, float *out_limit);
-	int ResetSpeedPidIntegrator();
-
 private:
-	static constexpr float kKinematicsFactor = 0.707107f;
-	static constexpr float kPidKp = 3.0f;
-	static constexpr float kPidKi = 0.2f;
-	static constexpr float kPidKd = 0.0f;
-	static constexpr float kIntegralLimit = 500.0f;
-	static constexpr float kCurrentLimit = 16384.0f;
-	static constexpr float kCommandVxLimit = 20.0f;
-	static constexpr float kCommandVyLimit = 20.0f;
-	static constexpr float kCommandWzLimit = 20.0f;
-	static constexpr float kWheelTargetOmegaLimit = 40.0f;
-	static constexpr uint32_t kNoCommandStopTicks = 100U;
+	static constexpr uint32_t kMitEnterRepeatTicks = 50U;
 
 	void RunLoop();
-	void UpdateStateFromCommand(const channels::ChassisCommandMessage &command);
-	void DecodeCanFramesInQueue();
-	void ApplyWheelSpeedPidAndSend();
-	void ResetTargetsAndPid();
+	void SendDmEnterFrames();
+	void SendDmTorqueCommand(uint8_t bus, uint16_t can_id, double torque);
 
 	struct k_thread thread_;
 	bool started_ = false;
-	uint32_t publish_sequence_ = 0U;
-	uint32_t idle_ticks_ = 0U;
-	channels::ChassisStateMessage state_ = {};
-	channels::MotorFeedbackMessage motor_feedback_[4] = {};
-	bool motor_feedback_valid_[4] = {false, false, false, false};
-	alg::Pid wheel_speed_pid_[4] = {};
-	float pid_kp_ = kPidKp;
-	float pid_ki_ = kPidKi;
-	float pid_kd_ = kPidKd;
-	float pid_i_limit_ = kIntegralLimit;
-	float pid_out_limit_ = kCurrentLimit;
-	struct k_mutex pid_mutex_;
+	uint32_t loop_ticks_ = 0U;
+
+	protocols::motors::dji::DjiMotorFeedback left_wheel_state_;
+	protocols::motors::dji::DjiMotorFeedback right_wheel_state_;
+	protocols::motors::dm::DmMotorFeedbackNormal left_joint_B_state;
+	protocols::motors::dm::DmMotorFeedbackNormal right_joint_B_state;
+	protocols::motors::dm::DmMotorFeedbackNormal left_joint_D_state;
+	protocols::motors::dm::DmMotorFeedbackNormal right_joint_D_state;
+	wbr::v2::GroundBalanceController leg_length_controller_;
+
 };
 
 }  // namespace modules::chassis
-
-#endif /* RM_TEST_APP_MODULES_CHASSIS_CHASSIS_MODULE_H_ */

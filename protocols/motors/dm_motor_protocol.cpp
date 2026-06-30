@@ -10,6 +10,8 @@
 
 #include <protocols/motors/dm_motor_protocol.h>
 
+constexpr float kCelsiusToKelvin = 273.15f;
+
 namespace protocols::motors::dm {
 
 namespace {
@@ -35,6 +37,21 @@ int DecodeFeedback1To4(const uint8_t *data, uint8_t dlc, DmMotorFeedback1To4 *ou
 	out->current_ma = static_cast<int16_t>(sys_get_be16(&data[4]));
 	out->rotor_temperature = data[6];
 	out->mos_temperature = data[7];
+	return 0;
+}
+
+int DecodeFeedbackNormal(const uint8_t *data, uint8_t dlc, DmMotorFeedbackNormal *out)
+{
+	if ((data == nullptr) || (out == nullptr) || (dlc < 8U)) {
+		return -EINVAL;
+	}
+	out->control_status = data[0] >> 4;
+	out->angle = (static_cast<uint16_t>(data[1]) << 8) | data[2];
+	out->omega = (static_cast<uint16_t>(data[3]) << 4) | (data[4] >> 4);
+	out->torque = (static_cast<uint16_t>(data[4] & 0x0f) << 8) | data[5];
+	out->mos_temperature = data[6] + kCelsiusToKelvin;
+	out->rotor_temperature = data[7] + kCelsiusToKelvin;
+
 	return 0;
 }
 

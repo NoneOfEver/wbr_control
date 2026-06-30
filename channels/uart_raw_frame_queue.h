@@ -6,24 +6,26 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <zephyr/kernel.h>
+#include <zephyr/sys/ring_buffer.h>
+
 namespace channels::uart_raw_frame_queue {
 
 constexpr size_t kUartRawChunkSize = 32U;
+constexpr size_t kQueueDepth = 32U;
+constexpr size_t kRemoteInputRingBufSize = 512U;
 
 struct UartRawFrameMessage {
-	uint8_t len;
-	uint8_t data[kUartRawChunkSize];
+  uint8_t len;
+  uint8_t data[kUartRawChunkSize];
 };
 
-int EnqueueForRemoteInput(const UartRawFrameMessage *frame);
-int DequeueForRemoteInput(UartRawFrameMessage *frame);
+extern struct ring_buf remote_input_ring_buf;
+extern struct k_sem remote_input_sem;
+extern struct k_msgq remote_input_uart_raw_msgq;
+extern struct k_msgq referee_uart_raw_msgq;
+extern struct k_msgq mavlink_uart_raw_msgq;
 
-int EnqueueForReferee(const UartRawFrameMessage *frame);
-int DequeueForReferee(UartRawFrameMessage *frame);
-
-int EnqueueForMavlink(const UartRawFrameMessage *frame);
-int DequeueForMavlink(UartRawFrameMessage *frame);
-
-}  // namespace channels::uart_raw_frame_queue
+} // namespace channels::uart_raw_frame_queue
 
 #endif /* RM_TEST_APP_CHANNELS_UART_RAW_FRAME_QUEUE_H_ */

@@ -17,6 +17,28 @@ struct DmMotorFeedback1To4 {
 	uint8_t mos_temperature;
 };
 
+struct DmMotorRawDataNormal
+{
+    uint8_t can_id : 4;
+    uint8_t control_status_enum : 4;
+    uint16_t angle_reverse;
+    uint8_t omega_11_4;
+    uint8_t omega_3_0_torque_11_8;
+    uint8_t torque_7_0;
+    uint8_t mos_temperature;
+    uint8_t rotor_temperature;
+} __attribute__((packed));
+
+struct DmMotorFeedbackNormal
+{
+    uint8_t control_status;
+    uint16_t angle;
+    uint16_t omega;
+    uint16_t torque;
+    float mos_temperature;
+    float rotor_temperature;
+};
+
 enum class DmControlCommand {
 	kClearError,
 	kEnter,
@@ -46,6 +68,7 @@ struct DmMitRange {
 };
 
 int DecodeFeedback1To4(const uint8_t *data, uint8_t dlc, DmMotorFeedback1To4 *out);
+int DecodeFeedbackNormal(const uint8_t *data, uint8_t dlc, DmMotorFeedbackNormal *out);
 int GetControlCommandFrame(DmControlCommand cmd, uint8_t out[8]);
 int PackMitCommand(const DmMitCommand *cmd, const DmMitRange *range, uint8_t out[8]);
 int Pack1To4CurrentFrame(uint16_t motor_can_id, int16_t current_ma, uint8_t frame_payload[8]);

@@ -2,12 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RM_TEST_APP_PROTOCOLS_MOTORS_DJI_MOTOR_PROTOCOL_H_
-#define RM_TEST_APP_PROTOCOLS_MOTORS_DJI_MOTOR_PROTOCOL_H_
-
+#pragma once
 #include <stdint.h>
-
-#include <channels/motor_feedback_channel.h>
 
 namespace protocols::motors::dji {
 
@@ -20,8 +16,6 @@ struct DjiMotorFeedback {
 
 bool IsStandardFeedbackId(uint16_t can_id);
 int DecodeFeedback(const uint8_t *data, uint8_t dlc, DjiMotorFeedback *out);
-int IngestCanFrame(uint8_t bus, uint16_t can_id, uint8_t dlc, const uint8_t *data);
-int GetLatestState(uint16_t can_id, channels::MotorFeedbackMessage *out);
 
 // Pack 4 motor currents for CAN ID 0x200 (0x201~0x204).
 int EncodeCurrentFrame0x200(const int16_t current_cmd[4], uint8_t out[8]);
@@ -32,5 +26,3 @@ int EncodeCurrentFrame0x1ff(const int16_t current_cmd[4], uint8_t out[8]);
 int WriteCurrentCommandToSlot(uint16_t motor_can_id, int16_t current_cmd, uint8_t frame_payload[8]);
 
 }  // namespace protocols::motors::dji
-
-#endif /* RM_TEST_APP_PROTOCOLS_MOTORS_DJI_MOTOR_PROTOCOL_H_ */

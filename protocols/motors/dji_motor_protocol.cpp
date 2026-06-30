@@ -30,9 +30,6 @@ constexpr uint16_t kDjiId2 = 0x202;
 constexpr uint16_t kDjiId3 = 0x203;
 constexpr uint16_t kDjiId4 = 0x204;
 
-channels::MotorFeedbackMessage g_latest_state[4] = {};
-bool g_latest_state_valid[4] = {false, false, false, false};
-uint32_t g_feedback_sequence = 0U;
 
 int MotorIndexFromId(uint16_t can_id)
 {
@@ -86,61 +83,6 @@ int DecodeFeedback(const uint8_t *data, uint8_t dlc, DjiMotorFeedback *out)
 	return 0;
 }
 
-int IngestCanFrame(uint8_t bus, uint16_t can_id, uint8_t dlc, const uint8_t *data)
-{
-	if (data == nullptr || dlc < 7U) {
-		return -EINVAL;
-	}
-
-	const int idx = MotorIndexFromId(can_id);
-	if (idx < 0) {
-		return -EINVAL;
-	}
-
-	channels::MotorFeedbackMessage state = {};
-	DjiMotorFeedback feedback = {};
-	const int decode_rc = DecodeFeedback(data, dlc, &feedback);
-	if (decode_rc != 0) {
-		return decode_rc;
-	}
-
-	state.bus = bus;
-	state.can_id = can_id;
-	state.encoder = feedback.encoder;
-	state.omega = feedback.omega;
-	state.current = feedback.current;
-	state.temperature = feedback.temperature;
-	state.sequence = ++g_feedback_sequence;
-
-	unsigned int key = irq_lock();
-	g_latest_state[idx] = state;
-	g_latest_state_valid[idx] = true;
-	irq_unlock(key);
-
-	return 0;
-}
-
-int GetLatestState(uint16_t can_id, channels::MotorFeedbackMessage *out)
-{
-	if (out == nullptr) {
-		return -EINVAL;
-	}
-
-	const int idx = MotorIndexFromId(can_id);
-	if (idx < 0) {
-		return -EINVAL;
-	}
-
-	unsigned int key = irq_lock();
-	if (!g_latest_state_valid[idx]) {
-		irq_unlock(key);
-		return -ENOENT;
-	}
-
-	*out = g_latest_state[idx];
-	irq_unlock(key);
-	return 0;
-}
 
 int EncodeCurrentFrame0x200(const int16_t current_cmd[4], uint8_t out[8])
 {

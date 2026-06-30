@@ -1,11 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#ifndef RM_TEST_APP_MODULES_REFEREE_REFEREE_MODULE_H_
-#define RM_TEST_APP_MODULES_REFEREE_REFEREE_MODULE_H_
-
+#pragma once
 #include <zephyr/kernel.h>
-
-#include <channels/referee_state_channel.h>
 
 namespace modules::referee {
 
@@ -25,5 +21,3 @@ private:
 };
 
 }  // namespace modules::referee
-
-#endif /* RM_TEST_APP_MODULES_REFEREE_REFEREE_MODULE_H_ */

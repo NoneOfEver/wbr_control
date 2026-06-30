@@ -61,13 +61,8 @@ check_file_contains "$ROOT_DIR/src/main.cpp" "g_remote_input_module\\.Start\\(" 
 check_file_contains "$ROOT_DIR/src/main.cpp" "g_chassis_module\\.Start\\(" "main starts chassis module directly"
 check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_REMOTE_INPUT" "Remote input module is config-gated"
 check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_CHASSIS" "Chassis module is config-gated"
-check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_ARM" "Arm module is config-gated"
 check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_GIMBAL" "Gimbal module is config-gated"
-check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_GANTRY" "Gantry module is config-gated"
 check_file_contains "$ROOT_DIR/src/main.cpp" "CONFIG_RM_TEST_MODULE_REFEREE" "Referee module is config-gated"
-check_file_contains "$ROOT_DIR/debug/shell/chassis_tuning_shell.cpp" "SHELL_CMD\\(status, NULL, \"Show chassis tuning provider status\"" "Shell exposes chassis pid status command"
-check_file_contains "$ROOT_DIR/services/chassis/chassis_tuning_service.h" "bool HasProvider\\(\\)" "Tuning service provides provider state query"
-check_file_contains "$ROOT_DIR/modules/arm/arm_module.cpp" "\\[baseline\\]\\[arm\\]" "Arm baseline trace exists"
 check_file_contains "$ROOT_DIR/modules/gimbal/gimbal_module.cpp" "\\[baseline\\]\\[gimbal\\]" "Gimbal baseline trace exists"
 check_file_contains "$ROOT_DIR/modules/gimbal/gimbal_module.cpp" "yid=%u pid=%u yon=%u pon=%u" "Gimbal baseline includes runtime servo id and online state"
 
@@ -86,8 +81,6 @@ echo "-- [3/5] Build CAN-off configuration"
 cat > "$OVERLAY_FILE" <<EOF
 CONFIG_RM_TEST_RUNTIME_INIT_CAN=n
 CONFIG_RM_TEST_MODULE_CHASSIS=n
-CONFIG_RM_TEST_MODULE_ARM=n
-CONFIG_RM_TEST_MODULE_GANTRY=n
 EOF
 
 PYTHON_BIN="${WS_DIR}/.venv/bin/python"

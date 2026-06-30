@@ -8,72 +8,80 @@
 #include <errno.h>
 
 #include <algorithm>
+#include <channels/chassismotors_feedback_raw.hpp>
+#include <channels/chassismotors_send_raw.hpp>
 #include <modules/thread_utils.h>
 #include <modules/chassis/chassis_module.h>
 #include <protocols/motors/dji_motor_protocol.h>
-#include <services/chassis/chassis_tuning_service.h>
-
-#if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/can.h>
-#include <zephyr/kernel.h>
-#endif
-
+#include <protocols/motors/dm_motor_protocol.h>
 namespace {
 
-K_THREAD_STACK_DEFINE(g_chassis_module_stack, 1024);
-constexpr bool kBaselineTraceEnabled = false;
-constexpr uint32_t kBaselineTracePeriod = 500U;
+K_THREAD_STACK_DEFINE(g_chassis_module_stack, 4096);
+constexpr uint8_t kLeftLegBus = 0U;
+constexpr uint8_t kRightLegBus = 1U;
+constexpr uint16_t kLeftJointBCanId = 0x00U;
+constexpr uint16_t kLeftJointBMasterId = 0x10U;
+constexpr uint16_t kLeftJointDCanId = 0x03U;
+constexpr uint16_t kLeftJointDMasterId = 0x13U;
+constexpr uint16_t kRightJointBCanId = 0x01U;
+constexpr uint16_t kRightJointBMasterId = 0x11U;
+constexpr uint16_t kRightJointDCanId = 0x02U;
+constexpr uint16_t kRightJointDMasterId = 0x12U;
 
-int SendCan1StdFrame(uint16_t can_id, const uint8_t *data, uint8_t dlc)
+constexpr double kDefaultTargetLegLength = 0.18;
+constexpr double kDefaultTargetLegAngle = 0.0;
+constexpr double kDefaultControlDt = 0.001;
+constexpr uint32_t kLegFeedbackTracePeriod = 1000U;
+constexpr uint32_t kLegTorqueTracePeriod = 1000U;
+constexpr int kLeftLegKinematicBranch = 1;
+constexpr int kRightLegKinematicBranch = -1;
+
+constexpr protocols::motors::dm::DmMitRange kDmJointMitRange = {
+	.p_min = -12.56637f,
+	.p_max = 12.56637f,
+	.v_min = -45.0f,
+	.v_max = 45.0f,
+	.kp_min = 0.0f,
+	.kp_max = 500.0f,
+	.kd_min = 0.0f,
+	.kd_max = 5.0f,
+	.t_min = -54.0f,
+	.t_max = 54.0f,
+};
+
+float UIntToFloat(uint16_t value, float min_value, float max_value, uint8_t bits)
 {
-#if defined(CONFIG_RM_TEST_RUNTIME_INIT_CAN) && (CONFIG_RM_TEST_RUNTIME_INIT_CAN == 1)
-	if ((data == nullptr) || (dlc > 8U)) {
-		return -EINVAL;
-	}
+	const float span = max_value - min_value;
+	const float max_int = static_cast<float>((1U << bits) - 1U);
+	return static_cast<float>(value) * span / max_int + min_value;
+}
 
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(can1), okay)
-	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(can1));
-	if (!device_is_ready(dev)) {
-		return -ENODEV;
-	}
+double DmPositionRad(const protocols::motors::dm::DmMotorFeedbackNormal &feedback)
+{
+	return UIntToFloat(feedback.angle, kDmJointMitRange.p_min, kDmJointMitRange.p_max, 16);
+}
 
-	struct can_frame frame = {};
-	frame.flags = 0U;
-	frame.id = can_id;
-	frame.dlc = dlc;
-	for (uint8_t i = 0U; i < dlc; ++i) {
+double DmVelocityRadPerSec(const protocols::motors::dm::DmMotorFeedbackNormal &feedback)
+{
+	return UIntToFloat(feedback.omega, kDmJointMitRange.v_min, kDmJointMitRange.v_max, 12);
+}
+
+void PublishRawCanFrame(SeqlockValue<ChassisMotorSendRawFrame> &slot,
+			uint8_t bus,
+			uint16_t can_id,
+			const uint8_t data[8])
+{
+	ChassisMotorSendRawFrame frame = {};
+	frame.bus = bus;
+	frame.can_id = can_id;
+	frame.dlc = 8U;
+	for (size_t i = 0U; i < sizeof(frame.data); ++i) {
 		frame.data[i] = data[i];
 	}
-
-	return can_send(dev, &frame, K_NO_WAIT, nullptr, nullptr);
-#else
-	return -ENODEV;
-#endif
-#else
-	ARG_UNUSED(can_id);
-	ARG_UNUSED(data);
-	ARG_UNUSED(dlc);
-	return -ENOTSUP;
-#endif
+	slot.write(frame);
 }
 
-int SendDjiCurrent0x200OnCan1(const int16_t current_cmd[4])
-{
-	if (current_cmd == nullptr) {
-		return -EINVAL;
-	}
 
-	uint8_t frame[8] = {0U};
-	const int encode_rc =
-		protocols::motors::dji::EncodeCurrentFrame0x200(current_cmd, frame);
-	if (encode_rc != 0) {
-		return encode_rc;
-	}
-
-	return SendCan1StdFrame(0x200U, frame, 8U);
-}
 
 }  // namespace
 
@@ -81,89 +89,22 @@ namespace modules::chassis {
 
 int ChassisModule::Initialize()
 {
-	state_ = {};
-	publish_sequence_ = 0U;
-	idle_ticks_ = 0U;
 	started_ = false;
-	(void)k_mutex_init(&pid_mutex_);
+	loop_ticks_ = 0U;
+	left_wheel_state_ = {};
+	right_wheel_state_ = {};
+	left_joint_B_state = {};
+	left_joint_D_state = {};
+	right_joint_B_state = {};
+	right_joint_D_state = {};
+	leg_length_controller_.Reset();
+	leg_length_controller_.SetLqrEnabled(false);
+	leg_length_controller_.SetYawEnabled(false);
+	leg_length_controller_.InitializeLegTarget(kDefaultTargetLegLength, kDefaultTargetLegAngle);
 
-	const int unregister_rc = services::chassis_tuning::UnregisterProvider(this);
-	if ((unregister_rc != 0) && (unregister_rc != -ENOENT)) {
-		return unregister_rc;
-	}
-
-	const int register_rc =
-		services::chassis_tuning::RegisterProvider(this, "chassis_module", 100);
-	if (register_rc != 0) {
-		return register_rc;
-	}
-
-	return SetSpeedPidTuning(kPidKp, kPidKi, kPidKd, kIntegralLimit, kCurrentLimit);
-}
-
-void ChassisModule::ResetTargetsAndPid()
-{
-	state_.wheel1_target_omega = 0.0f;
-	state_.wheel2_target_omega = 0.0f;
-	state_.wheel3_target_omega = 0.0f;
-	state_.wheel4_target_omega = 0.0f;
-	(void)ResetSpeedPidIntegrator();
-}
-
-int ChassisModule::SetSpeedPidTuning(float kp, float ki, float kd, float i_limit, float out_limit)
-{
-	if ((i_limit <= 0.0f) || (out_limit <= 0.0f)) {
-		return -EINVAL;
-	}
-
-	(void)k_mutex_lock(&pid_mutex_, K_FOREVER);
-	pid_kp_ = kp;
-	pid_ki_ = ki;
-	pid_kd_ = kd;
-	pid_i_limit_ = i_limit;
-	pid_out_limit_ = out_limit;
-
-	for (int i = 0; i < 4; ++i) {
-		wheel_speed_pid_[i].Init(
-			pid_kp_,
-			pid_ki_,
-			pid_kd_,
-			0.0f,
-			pid_i_limit_,
-			pid_out_limit_,
-			0.001f);
-		wheel_speed_pid_[i].SetIntegralError(0.0f);
-	}
-	k_mutex_unlock(&pid_mutex_);
 	return 0;
 }
 
-int ChassisModule::GetSpeedPidTuning(float *kp, float *ki, float *kd, float *i_limit, float *out_limit)
-{
-	if ((kp == nullptr) || (ki == nullptr) || (kd == nullptr) || (i_limit == nullptr) ||
-	    (out_limit == nullptr)) {
-		return -EINVAL;
-	}
-
-	(void)k_mutex_lock(&pid_mutex_, K_FOREVER);
-	*kp = pid_kp_;
-	*ki = pid_ki_;
-	*kd = pid_kd_;
-	*i_limit = pid_i_limit_;
-	*out_limit = pid_out_limit_;
-	k_mutex_unlock(&pid_mutex_);
-	return 0;
-}
-
-int ChassisModule::ResetSpeedPidIntegrator()
-{
-	(void)k_mutex_lock(&pid_mutex_, K_FOREVER);
-	for (int i = 0; i < 4; ++i) {
-		wheel_speed_pid_[i].reset();
-	}
-	k_mutex_unlock(&pid_mutex_);
-	return 0;
-}
 
 int ChassisModule::Start()
 {
@@ -186,132 +127,152 @@ void ChassisModule::RunLoop()
 {
 	printk("chassis module started\n");
 
-	channels::ChassisCommandMessage command = {};
+	ChassisMotorFeedbackRawFrame left_wheel_feedback_local = {};
+	ChassisMotorFeedbackRawFrame right_wheel_feedback_local = {};
+	ChassisMotorFeedbackRawFrame left_B_motor_feedback_local = {};
+	ChassisMotorFeedbackRawFrame left_D_motor_feedback_local = {};
+	ChassisMotorFeedbackRawFrame right_B_motor_feedback_local = {};
+	ChassisMotorFeedbackRawFrame right_D_motor_feedback_local = {};
 
-	while (true) {
-		DecodeCanFramesInQueue();
+	for (;;) {
 
-		if (zbus_chan_read(&rm_test_chassis_command_chan, &command, K_NO_WAIT) == 0) {
-			idle_ticks_ = 0U;
-			UpdateStateFromCommand(command);
-		} else {
-			++idle_ticks_;
-			if (idle_ticks_ > kNoCommandStopTicks) {
-				ResetTargetsAndPid();
-			}
+		const uint32_t left_B_feedback_sequence = left_B_motor_feedback_raw.sequence();
+		const uint32_t left_D_feedback_sequence = left_D_motor_feedback_raw.sequence();
+		const uint32_t right_B_feedback_sequence = right_B_motor_feedback_raw.sequence();
+		const uint32_t right_D_feedback_sequence = right_D_motor_feedback_raw.sequence();
+
+		left_wheel_feedback_raw.read(left_wheel_feedback_local);
+		right_wheel_feedback_raw.read(right_wheel_feedback_local);
+		left_B_motor_feedback_raw.read(left_B_motor_feedback_local);
+		left_D_motor_feedback_raw.read(left_D_motor_feedback_local);
+		right_B_motor_feedback_raw.read(right_B_motor_feedback_local);
+		right_D_motor_feedback_raw.read(right_D_motor_feedback_local);
+
+		(void)protocols::motors::dji::DecodeFeedback(left_wheel_feedback_local.data, 8, &left_wheel_state_);
+		(void)protocols::motors::dji::DecodeFeedback(right_wheel_feedback_local.data, 8, &right_wheel_state_);
+		(void)protocols::motors::dm::DecodeFeedbackNormal(left_B_motor_feedback_local.data, 8, &left_joint_B_state);
+		(void)protocols::motors::dm::DecodeFeedbackNormal(left_D_motor_feedback_local.data, 8, &left_joint_D_state);
+		(void)protocols::motors::dm::DecodeFeedbackNormal(right_B_motor_feedback_local.data, 8, &right_joint_B_state);
+		(void)protocols::motors::dm::DecodeFeedbackNormal(right_D_motor_feedback_local.data, 8, &right_joint_D_state);
+
+		wbr::v2::GroundBalanceInput controller_input = {};
+		controller_input.control_dt = kDefaultControlDt;
+		controller_input.target_leg_length = kDefaultTargetLegLength;
+		controller_input.target_leg_angle = kDefaultTargetLegAngle;
+		controller_input.total_mass = 8.18;
+		controller_input.gravity_magnitude = 9.80665;
+		if ((left_B_feedback_sequence != 0U) && (left_D_feedback_sequence != 0U)) {
+			controller_input.leg_valid[0] = wbr::v2::ComputeLegKinematics(
+				DmPositionRad(left_joint_D_state),
+				DmPositionRad(left_joint_B_state),
+				DmVelocityRadPerSec(left_joint_D_state),
+				DmVelocityRadPerSec(left_joint_B_state),
+				kLeftLegKinematicBranch,
+				controller_input.leg[0]);
+		}
+		if ((right_B_feedback_sequence != 0U) && (right_D_feedback_sequence != 0U)) {
+			controller_input.leg_valid[1] = wbr::v2::ComputeLegKinematics(
+				DmPositionRad(right_joint_D_state),
+				DmPositionRad(right_joint_B_state),
+				DmVelocityRadPerSec(right_joint_D_state),
+				DmVelocityRadPerSec(right_joint_B_state),
+				kRightLegKinematicBranch,
+				controller_input.leg[1]);
 		}
 
-		ApplyWheelSpeedPidAndSend();
+		if ((loop_ticks_ % kLegFeedbackTracePeriod) == 0U) {
+			printk("[chassis] leg feedback seq LB=%u LD=%u RB=%u RD=%u valid L=%u R=%u\n",
+			       static_cast<unsigned int>(left_B_feedback_sequence),
+			       static_cast<unsigned int>(left_D_feedback_sequence),
+			       static_cast<unsigned int>(right_B_feedback_sequence),
+			       static_cast<unsigned int>(right_D_feedback_sequence),
+			       controller_input.leg_valid[0] ? 1U : 0U,
+			       controller_input.leg_valid[1] ? 1U : 0U);
+		}
 
-		state_.sequence = ++publish_sequence_;
-		(void)zbus_chan_pub(&rm_test_chassis_state_chan, &state_, K_NO_WAIT);
+		const wbr::v2::GroundBalanceOutput controller_output =
+			leg_length_controller_.Update(controller_input);
+		const auto motor_index = [](wbr::control::MotorId id) {
+			return static_cast<int>(id);
+		};
+
+		if (loop_ticks_ < kMitEnterRepeatTicks) {
+			SendDmEnterFrames();
+		} else {
+			const auto &left_b = controller_output.actuator.motor[
+				motor_index(wbr::control::MotorId::kLeftJointB)];
+			const auto &left_d = controller_output.actuator.motor[
+				motor_index(wbr::control::MotorId::kLeftJointD)];
+			const auto &right_b = controller_output.actuator.motor[
+				motor_index(wbr::control::MotorId::kRightJointB)];
+			const auto &right_d = controller_output.actuator.motor[
+				motor_index(wbr::control::MotorId::kRightJointD)];
+			if ((loop_ticks_ % kLegTorqueTracePeriod) == 0U) {
+				printk("[chassis] leg len L=%d R=%d torque LB=%d LD=%d RB=%d RD=%d en=%u%u%u%u\n",
+				       static_cast<int>(controller_input.leg[0].length * 1000.0),
+				       static_cast<int>(controller_input.leg[1].length * 1000.0),
+				       static_cast<int>(left_b.torque * 1000.0),
+				       static_cast<int>(left_d.torque * 1000.0),
+				       static_cast<int>(right_b.torque * 1000.0),
+				       static_cast<int>(right_d.torque * 1000.0),
+				       left_b.enabled ? 1U : 0U,
+				       left_d.enabled ? 1U : 0U,
+				       right_b.enabled ? 1U : 0U,
+				       right_d.enabled ? 1U : 0U);
+			}
+			SendDmTorqueCommand(kLeftLegBus, kLeftJointBCanId,
+					    left_b.enabled ? left_b.torque : 0.0);
+			SendDmTorqueCommand(kLeftLegBus, kLeftJointDCanId,
+					    left_d.enabled ? left_d.torque : 0.0);
+			SendDmTorqueCommand(kRightLegBus, kRightJointBCanId,
+					    right_b.enabled ? right_b.torque : 0.0);
+			SendDmTorqueCommand(kRightLegBus, kRightJointDCanId,
+					    right_d.enabled ? right_d.torque : 0.0);
+		}
+		++loop_ticks_;
+
 		k_sleep(K_MSEC(1));
 	}
 }
 
-void ChassisModule::DecodeCanFramesInQueue()
+void ChassisModule::SendDmEnterFrames()
 {
-	while (true) {
-		channels::can_raw_frame_queue::CanRawFrameMessage frame = {};
-		if (channels::can_raw_frame_queue::DequeueForChassis(&frame) != 0) {
-			break;
-		}
+	uint8_t data[8] = {};
+	if (protocols::motors::dm::GetControlCommandFrame(
+		    protocols::motors::dm::DmControlCommand::kEnter, data) != 0) {
+		return;
+	}
+	PublishRawCanFrame(left_B_motor_send_raw, kLeftLegBus, kLeftJointBCanId, data);
+	PublishRawCanFrame(left_D_motor_send_raw, kLeftLegBus, kLeftJointDCanId, data);
+	PublishRawCanFrame(right_B_motor_send_raw, kRightLegBus, kRightJointBCanId, data);
+	PublishRawCanFrame(right_D_motor_send_raw, kRightLegBus, kRightJointDCanId, data);
+}
 
-		if (frame.bus != 1U) {
-			continue;
-		}
+void ChassisModule::SendDmTorqueCommand(uint8_t bus, uint16_t can_id, double torque)
+{
+	protocols::motors::dm::DmMitCommand command = {};
+	command.position = 0.0f;
+	command.velocity = 0.0f;
+	command.kp = 0.0f;
+	command.kd = 0.0f;
+	command.torque = static_cast<float>(torque);
 
-		if ((frame.can_id < 0x201U) || (frame.can_id > 0x204U)) {
-			continue;
-		}
+	uint8_t data[8] = {};
+	if (protocols::motors::dm::PackMitCommand(&command, &kDmJointMitRange, data) != 0) {
+		return;
+	}
 
-		protocols::motors::dji::DjiMotorFeedback decoded = {};
-		if (protocols::motors::dji::DecodeFeedback(frame.data, frame.dlc, &decoded) != 0) {
-			continue;
-		}
-
-		const int idx = static_cast<int>(frame.can_id - 0x201U);
-		if ((idx < 0) || (idx >= 4)) {
-			continue;
-		}
-
-		motor_feedback_[idx].bus = frame.bus;
-		motor_feedback_[idx].can_id = frame.can_id;
-		motor_feedback_[idx].encoder = decoded.encoder;
-		motor_feedback_[idx].omega = decoded.omega;
-		motor_feedback_[idx].current = decoded.current;
-		motor_feedback_[idx].temperature = decoded.temperature;
-		motor_feedback_valid_[idx] = true;
+	if ((bus == kLeftLegBus) && (can_id == kLeftJointBCanId)) {
+		PublishRawCanFrame(left_B_motor_send_raw, bus, can_id, data);
+	} else if ((bus == kLeftLegBus) && (can_id == kLeftJointDCanId)) {
+		PublishRawCanFrame(left_D_motor_send_raw, bus, can_id, data);
+	} else if ((bus == kRightLegBus) && (can_id == kRightJointBCanId)) {
+		PublishRawCanFrame(right_B_motor_send_raw, bus, can_id, data);
+	} else if ((bus == kRightLegBus) && (can_id == kRightJointDCanId)) {
+		PublishRawCanFrame(right_D_motor_send_raw, bus, can_id, data);
 	}
 }
 
-void ChassisModule::UpdateStateFromCommand(const channels::ChassisCommandMessage &command)
-{
-	const float vx = std::clamp(command.target_vx, -kCommandVxLimit, kCommandVxLimit);
-	const float vy = std::clamp(command.target_vy, -kCommandVyLimit, kCommandVyLimit);
-	const float wz = std::clamp(command.target_wz, -kCommandWzLimit, kCommandWzLimit);
 
-	state_.wheel1_target_omega = std::clamp(
-		(+kKinematicsFactor * vx - kKinematicsFactor * vy) + wz,
-		-kWheelTargetOmegaLimit,
-		kWheelTargetOmegaLimit);
-	state_.wheel2_target_omega = std::clamp(
-		(-kKinematicsFactor * vx - kKinematicsFactor * vy) + wz,
-		-kWheelTargetOmegaLimit,
-		kWheelTargetOmegaLimit);
-	state_.wheel3_target_omega = std::clamp(
-		(-kKinematicsFactor * vx + kKinematicsFactor * vy) + wz,
-		-kWheelTargetOmegaLimit,
-		kWheelTargetOmegaLimit);
-	state_.wheel4_target_omega = std::clamp(
-		(+kKinematicsFactor * vx + kKinematicsFactor * vy) + wz,
-		-kWheelTargetOmegaLimit,
-		kWheelTargetOmegaLimit);
-}
-
-void ChassisModule::ApplyWheelSpeedPidAndSend()
-{
-	const float target[4] = {
-		state_.wheel1_target_omega,
-		state_.wheel2_target_omega,
-		state_.wheel3_target_omega,
-		state_.wheel4_target_omega,
-	};
-
-	int16_t current_cmd[4] = {0, 0, 0, 0};
-	(void)k_mutex_lock(&pid_mutex_, K_FOREVER);
-	for (int i = 0; i < 4; ++i) {
-		if (!motor_feedback_valid_[i]) {
-			continue;
-		}
-
-		const float measured = static_cast<float>(motor_feedback_[i].omega);
-		const float out = wheel_speed_pid_[i].update(target[i], measured);
-		current_cmd[i] = static_cast<int16_t>(out);
-	}
-	k_mutex_unlock(&pid_mutex_);
-
-	(void)SendDjiCurrent0x200OnCan1(current_cmd);
-
-	if (kBaselineTraceEnabled) {
-		static uint32_t trace_tick = 0U;
-		if ((++trace_tick % kBaselineTracePeriod) == 0U) {
-			printk("[baseline][chassis] tgt=(%.2f %.2f %.2f %.2f) meas=(%d %d %d %d) cur=(%d %d %d %d) idle=%u\n",
-			       static_cast<double>(target[0]),
-			       static_cast<double>(target[1]),
-			       static_cast<double>(target[2]),
-			       static_cast<double>(target[3]),
-			       static_cast<int>(motor_feedback_[0].omega),
-			       static_cast<int>(motor_feedback_[1].omega),
-			       static_cast<int>(motor_feedback_[2].omega),
-			       static_cast<int>(motor_feedback_[3].omega),
-			       static_cast<int>(current_cmd[0]),
-			       static_cast<int>(current_cmd[1]),
-			       static_cast<int>(current_cmd[2]),
-			       static_cast<int>(current_cmd[3]),
-			       static_cast<unsigned int>(idle_ticks_));
-		}
-	}
-}
 
 }  // namespace modules::chassis

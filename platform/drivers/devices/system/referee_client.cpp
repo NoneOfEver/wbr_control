@@ -19,7 +19,21 @@ constexpr uint16_t kCmdShootData = 0x0207U;
 
 uint8_t g_stream_buf[kMaxFrameSize] = {0};
 size_t g_stream_len = 0U;
-channels::RefereeStateMessage g_state = {};
+
+struct RefereeState {
+	uint16_t current_hp;
+	uint16_t max_hp;
+	uint16_t chassis_power_limit;
+	uint8_t gimbal_power_on;
+	uint8_t bullet_type;
+	uint8_t launching_frequency;
+	float initial_speed;
+	uint8_t game_type;
+	uint8_t game_progress;
+	uint16_t stage_remain_time;
+};
+
+RefereeState g_state = {};
 struct k_mutex g_state_mutex;
 bool g_initialized = false;
 
@@ -172,23 +186,6 @@ int FeedBytes(const uint8_t *data, size_t len)
 	return 0;
 }
 
-int GetLatestState(channels::RefereeStateMessage *out)
-{
-	if (out == nullptr) {
-		return -EINVAL;
-	}
 
-	if (!g_initialized) {
-		const int rc = Initialize();
-		if (rc != 0) {
-			return rc;
-		}
-	}
-
-	(void)k_mutex_lock(&g_state_mutex, K_FOREVER);
-	*out = g_state;
-	k_mutex_unlock(&g_state_mutex);
-	return 0;
-}
 
 }  // namespace platform::drivers::devices::system::referee_client

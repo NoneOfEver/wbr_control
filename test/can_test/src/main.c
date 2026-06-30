@@ -9,23 +9,22 @@
 
 #define TEST_CAN_ID 0x123U
 
-#if DT_NODE_HAS_STATUS(DT_ALIAS(canbus), okay)
-#define TEST_CAN_NODE DT_ALIAS(canbus)
-#elif DT_NODE_HAS_STATUS(DT_NODELABEL(can1), okay)
-#define TEST_CAN_NODE DT_NODELABEL(can1)
-#elif DT_NODE_HAS_STATUS(DT_NODELABEL(can0), okay)
+// #if DT_NODE_HAS_STATUS(DT_ALIAS(canbus), okay)
+// #define TEST_CAN_NODE DT_ALIAS(canbus)
+// #elif DT_NODE_HAS_STATUS(DT_NODELABEL(can1), okay)
+// #define TEST_CAN_NODE DT_NODELABEL(can1)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(can0), okay)
 #define TEST_CAN_NODE DT_NODELABEL(can0)
-#elif DT_NODE_HAS_STATUS(DT_NODELABEL(can2), okay)
-#define TEST_CAN_NODE DT_NODELABEL(can2)
-#elif DT_NODE_HAS_STATUS(DT_NODELABEL(can3), okay)
-#define TEST_CAN_NODE DT_NODELABEL(can3)
+// #elif DT_NODE_HAS_STATUS(DT_NODELABEL(can2), okay)
+// #define TEST_CAN_NODE DT_NODELABEL(can2)
+// #elif DT_NODE_HAS_STATUS(DT_NODELABEL(can3), okay)
+// #define TEST_CAN_NODE DT_NODELABEL(can3)
 #else
 #define TEST_CAN_NODE DT_INVALID_NODE
 #endif
 
 #define TEST_CAN_BITRATE DT_PROP_OR(TEST_CAN_NODE, bitrate, 1000000)
-#define TEST_CAN_DATA_BITRATE 4000000U
-#define TEST_CAN_PAYLOAD_BYTES 16U
+#define TEST_CAN_PAYLOAD_BYTES 8U
 
 #define TEST_CAN_XCVR_ENABLE_NODE DT_ALIAS(can_transceiver_enable)
 
@@ -136,9 +135,6 @@ static void PrintCanConfig(const struct device *can_dev)
 	}
 
 	printk("[INFO] requested bitrate: %u bit/s\n", TEST_CAN_BITRATE);
-#if defined(CONFIG_CAN_FD_MODE)
-	printk("[INFO] requested CAN FD data bitrate: %u bit/s\n", TEST_CAN_DATA_BITRATE);
-#endif
 }
 
 int main(void)
@@ -154,21 +150,15 @@ int main(void)
 	printk("using can device: %s\n", can_dev->name);
 	PrintCanConfig(can_dev);
 
-	int rc = can_set_mode(can_dev, CAN_MODE_FD);
+	int rc = can_set_mode(can_dev, CAN_MODE_NORMAL);
 	if (rc != 0) {
-		printk("[FAIL] can_set_mode(fd) rc=%d\n", rc);
+		printk("[FAIL] can_set_mode(normal) rc=%d\n", rc);
 		return rc;
 	}
 
 	rc = can_set_bitrate(can_dev, TEST_CAN_BITRATE);
 	if (rc != 0) {
 		printk("[FAIL] can_set_bitrate(%u) rc=%d\n", TEST_CAN_BITRATE, rc);
-		return rc;
-	}
-
-	rc = can_set_bitrate_data(can_dev, TEST_CAN_DATA_BITRATE);
-	if (rc != 0) {
-		printk("[FAIL] can_set_bitrate_data(%u) rc=%d\n", TEST_CAN_DATA_BITRATE, rc);
 		return rc;
 	}
 
@@ -204,7 +194,7 @@ int main(void)
 		printk("[INFO] RX filter installed for id=0x%x (filter_id=%d)\n", TEST_CAN_ID, filter_id);
 	}
 
-	printk("[INFO] physical CAN FD TX/RX test started (id=0x%x)\n", TEST_CAN_ID);
+	printk("[INFO] physical CAN TX/RX test started (id=0x%x)\n", TEST_CAN_ID);
 	printk("[INFO] connect CAN transceiver and a peer/analyzer at same baud\n");
 
 	uint32_t seq = 0U;
@@ -217,7 +207,7 @@ int main(void)
 		}
 
 		struct can_frame tx = {
-			.flags = CAN_FRAME_FDF | CAN_FRAME_BRS,
+			.flags = 0U,
 			.id = TEST_CAN_ID,
 			.dlc = can_bytes_to_dlc(TEST_CAN_PAYLOAD_BYTES),
 			.data = {
@@ -229,14 +219,6 @@ int main(void)
 				0x65U,
 				0x76U,
 				0x87U,
-				0x98U,
-				0xa9U,
-				0xbaU,
-				0xcbU,
-				0xdcU,
-				0xedU,
-				0xfeU,
-				0x0fU,
 			},
 		};
 

@@ -2,8 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RM_TEST_APP_CHANNELS_SYSTEM_STATUS_CHANNEL_H_
-#define RM_TEST_APP_CHANNELS_SYSTEM_STATUS_CHANNEL_H_
+#pragma once
 
 #include <stdint.h>
 #include <zephyr/zbus/zbus.h>
@@ -24,5 +23,3 @@ struct SystemStatusMessage {
 }  // namespace channels
 
 ZBUS_CHAN_DECLARE(rm_test_system_status_chan);
-
-#endif /* RM_TEST_APP_CHANNELS_SYSTEM_STATUS_CHANNEL_H_ */
