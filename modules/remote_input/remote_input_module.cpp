@@ -8,386 +8,328 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 
 #include <modules/remote_input/remote_input_module.h>
 #include <modules/thread_utils.h>
 #include <protocols/remote_input/dr16_protocol.h>
 #include <protocols/remote_input/vt03_protocol.h>
+#include <protocols/remote_input/wfly_sbus_protocol.h>
+
+LOG_MODULE_REGISTER(remote_input_module, LOG_LEVEL_INF);
 
 namespace {
 
 K_THREAD_STACK_DEFINE(g_remote_input_module_stack, 1024);
 
-}  // namespace
+constexpr float kWflySbusMid = 1024.0f;
+constexpr float kWflySbusScale = 670.0f;
+constexpr uint32_t kRemoteInputLogDecimation = 10U;
+
+float ClampNormalized(float value) {
+  if (value > 1.0f) {
+    return 1.0f;
+  }
+
+  if (value < -1.0f) {
+    return -1.0f;
+  }
+
+  return value;
+}
+
+float NormalizeWflyChannel(uint16_t raw) {
+  return ClampNormalized((static_cast<float>(raw) - kWflySbusMid) /
+                         kWflySbusScale);
+}
+
+int AxisMilli(float value) {
+  return static_cast<int>(value * 1000.0f);
+}
+
+bool ShouldLogRemoteInput(uint32_t sequence) {
+  return (sequence <= 10U) ||
+         ((sequence % kRemoteInputLogDecimation) == 0U);
+}
+
+const char *RemoteInputSourceName(uint8_t source) {
+  switch (source) {
+  case channels::kRemoteInputDr16:
+    return "dr16";
+  case channels::kRemoteInputVt03:
+    return "vt03";
+  case channels::kRemoteInputWfly:
+    return "wfly";
+  default:
+    return "unknown";
+  }
+}
+
+} // namespace
 
 namespace modules::remote_input {
 
-int RemoteInputModule::Initialize()
-{
-	publish_sequence_ = 0U;
-	started_ = false;
-	latest_input_ = {};
-	latest_input_valid_ = false;
-	line_pos_ = 0U;
-	line_buf_[0] = '\0';
-	binary_len_ = 0U;
-	return 0;
+int RemoteInputModule::Initialize() {
+  publish_sequence_ = 0U;
+  started_ = false;
+  line_pos_ = 0U;
+  line_buf_[0] = '\0';
+  binary_len_ = 0U;
+  return 0;
 }
 
-int RemoteInputModule::Start()
-{
-	if (started_) {
-		return 0;
-	}
+int RemoteInputModule::Start() {
+  if (started_) {
+    return 0;
+  }
 
-	::modules::StartMemberThread<RemoteInputModule, &RemoteInputModule::RunLoop>(
-		&thread_,
-		g_remote_input_module_stack,
-		K_THREAD_STACK_SIZEOF(g_remote_input_module_stack),
-		this,
-		K_PRIO_PREEMPT(8),
-		"remote_input_module");
+  ::modules::StartMemberThread<RemoteInputModule, &RemoteInputModule::RunLoop>(
+      &thread_, g_remote_input_module_stack,
+      K_THREAD_STACK_SIZEOF(g_remote_input_module_stack), this,
+      K_PRIO_PREEMPT(8), "remote_input_module");
 
-	started_ = true;
-	return 0;
+  started_ = true;
+  return 0;
 }
 
-void RemoteInputModule::RunLoop()
-{
-	printk("remote_input module started\n");
+void RemoteInputModule::RunLoop() {
+  printk("remote_input module started\n");
+  LOG_INF("remote_input log enabled");
 
-	channels::ChassisCommandMessage chassis_command = {};
-	channels::ArmCommandMessage arm_command = {};
-	channels::GimbalCommandMessage gimbal_command = {};
-	channels::GantryCommandMessage gantry_command = {};
-
-	while (true) {
-		DecodeUartFramesInQueue();
-
-		if (latest_input_valid_) {
-			chassis_command = ComposeChassisCommand(latest_input_);
-			arm_command = ComposeArmCommand(latest_input_);
-			gimbal_command = ComposeGimbalCommand(latest_input_);
-			gantry_command = ComposeGantryCommand(latest_input_);
-		} else {
-			chassis_command = {};
-			arm_command = {};
-			gimbal_command = {};
-			gantry_command = {};
-			chassis_command.source = channels::kInputSourceUnknown;
-			arm_command.source = channels::kInputSourceUnknown;
-			gimbal_command.source = channels::kInputSourceUnknown;
-			gantry_command.source = channels::kInputSourceUnknown;
-		}
-
-		const uint32_t sequence = ++publish_sequence_;
-		chassis_command.sequence = sequence;
-		arm_command.sequence = sequence;
-		gimbal_command.sequence = sequence;
-		gantry_command.sequence = sequence;
-
-		(void)zbus_chan_pub(&rm_test_chassis_command_chan, &chassis_command, K_NO_WAIT);
-		(void)zbus_chan_pub(&rm_test_arm_command_chan, &arm_command, K_NO_WAIT);
-		(void)zbus_chan_pub(&rm_test_gimbal_command_chan, &gimbal_command, K_NO_WAIT);
-		(void)zbus_chan_pub(&rm_test_gantry_command_chan, &gantry_command, K_NO_WAIT);
-		k_sleep(K_MSEC(1));
-	}
+  while (true) {
+    DecodeUartBytesFromRing();
+  }
 }
 
-int RemoteInputModule::ParseLine(const char *line, channels::RemoteInputMessage *out)
-{
-	if ((line == nullptr) || (out == nullptr)) {
-		return -EINVAL;
-	}
+int RemoteInputModule::ParseLine(const char *line,
+                                 channels::RemoteInputState *out) {
+  if ((line == nullptr) || (out == nullptr)) {
+    return -EINVAL;
+  }
 
-	char type[8] = {0};
-	float a = 0.0f;
-	float b = 0.0f;
-	float c = 0.0f;
-	int en = 0;
+  char type[8] = {0};
+  float chassis_x = 0.0f;
+  float chassis_rotate = 0.0f;
+  float yaw_angle = 0.0f;
+  float pitch_angle = 0.0f;
 
-	if (sscanf(line, "%7s %f %f %f %d", type, &a, &b, &c, &en) != 5) {
-		return -EINVAL;
-	}
+  if (sscanf(line, "%7s %f %f %f %f", type, &chassis_x, &chassis_rotate,
+             &yaw_angle, &pitch_angle) != 5) {
+    return -EINVAL;
+  }
 
-	if (strcmp(type, "dr16") == 0) {
-		out->source = channels::kRemoteInputDr16;
-		out->axis_lx = a;
-		out->axis_ly = b;
-		out->axis_wheel = c;
-		out->axis_jx = 0.0f;
-		out->axis_jy = 0.0f;
-		out->axis_jz = 0.0f;
-	} else if (strcmp(type, "vt03") == 0) {
-		out->source = channels::kRemoteInputVt03;
-		out->axis_jx = a;
-		out->axis_jy = b;
-		out->axis_jz = c;
-		out->axis_lx = 0.0f;
-		out->axis_ly = 0.0f;
-		out->axis_wheel = 0.0f;
-	} else {
-		return -EINVAL;
-	}
+  if (strcmp(type, "dr16") == 0) {
+    out->source = channels::kRemoteInputDr16;
+    out->chassis_x = chassis_x;
+    out->chassis_rotate = chassis_rotate;
+    out->yaw_angle = yaw_angle;
+    out->pitch_angle = pitch_angle;
+  } else if (strcmp(type, "vt03") == 0) {
+    out->source = channels::kRemoteInputVt03;
+    out->chassis_x = chassis_x;
+    out->chassis_rotate = chassis_rotate;
+    out->yaw_angle = yaw_angle;
+    out->pitch_angle = pitch_angle;
+  } else if (strcmp(type, "wfly") == 0) {
+    out->source = channels::kRemoteInputWfly;
+    out->chassis_x = chassis_x;
+    out->chassis_rotate = chassis_rotate;
+    out->yaw_angle = yaw_angle;
+    out->pitch_angle = pitch_angle;
+  } else {
+    return -EINVAL;
+  }
 
-	out->chassis_enable = (en != 0) ? 1U : 0U;
-	out->sequence = ++publish_sequence_;
-	return 0;
+  return 0;
 }
 
-void RemoteInputModule::ConsumeBinary(size_t bytes)
-{
-	if ((bytes == 0U) || (binary_len_ == 0U)) {
-		return;
-	}
+void RemoteInputModule::ConsumeBinary(size_t bytes) {
+  if ((bytes == 0U) || (binary_len_ == 0U)) {
+    return;
+  }
 
-	if (bytes >= binary_len_) {
-		binary_len_ = 0U;
-		return;
-	}
+  if (bytes >= binary_len_) {
+    binary_len_ = 0U;
+    return;
+  }
 
-	memmove(binary_buf_, binary_buf_ + bytes, binary_len_ - bytes);
-	binary_len_ -= bytes;
+  memmove(binary_buf_, binary_buf_ + bytes, binary_len_ - bytes);
+  binary_len_ -= bytes;
 }
 
-void RemoteInputModule::TryDecodeBinaryFrames()
-{
-	while (binary_len_ > 0U) {
-		channels::RemoteInputMessage input = {};
+void RemoteInputModule::TryDecodeBinaryFrames() {
+  while (binary_len_ > 0U) {
+    channels::RemoteInputState input = {};
 
-		if ((binary_len_ >= protocols::remote_input::vt03::kRemoteFrameLength) &&
-		    (binary_buf_[0] == 0xa9U) && (binary_buf_[1] == 0x53U)) {
-			protocols::remote_input::vt03::Vt03Frame vt03_frame = {};
-			if (protocols::remote_input::vt03::DecodeRemoteFrame(binary_buf_, binary_len_, &vt03_frame)) {
-				input.source = channels::kRemoteInputVt03;
-				input.axis_jx = vt03_frame.left_y;
-				input.axis_jy = vt03_frame.left_x;
-				input.axis_jz = vt03_frame.wheel;
-				input.chassis_enable = vt03_frame.chassis_enable ? 1U : 0U;
-				input.sequence = ++publish_sequence_;
-				latest_input_ = input;
-				latest_input_valid_ = true;
-				(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
-				ConsumeBinary(protocols::remote_input::vt03::kRemoteFrameLength);
-				continue;
-			}
-			ConsumeBinary(1U);
-			continue;
-		}
+    if (binary_buf_[0] == protocols::remote_input::wfly_sbus::kStartByte) {
+      if (binary_len_ < protocols::remote_input::wfly_sbus::kFrameLength) {
+        break;
+      }
 
-		if ((binary_len_ >= protocols::remote_input::vt03::kCustomFrameLength) &&
-		    (binary_buf_[0] == 0xa5U)) {
-			protocols::remote_input::vt03::Vt03CustomFrame custom = {};
-			if (protocols::remote_input::vt03::DecodeCustomFrame(binary_buf_, binary_len_, &custom)) {
-				input.source = channels::kRemoteInputVt03;
-				input.axis_jx = custom.joystick_x;
-				input.axis_jy = custom.joystick_y;
-				input.axis_jz = custom.joystick_z;
-				input.chassis_enable = custom.chassis_enable ? 1U : 0U;
-				input.sequence = ++publish_sequence_;
-				latest_input_ = input;
-				latest_input_valid_ = true;
-				(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
-				ConsumeBinary(protocols::remote_input::vt03::kCustomFrameLength);
-				continue;
-			}
-		}
+      protocols::remote_input::wfly_sbus::WflySbusFrame wfly_frame = {};
+      if (protocols::remote_input::wfly_sbus::DecodeFrame(
+              binary_buf_, binary_len_, &wfly_frame)) {
+        const uint32_t sequence = publish_sequence_ + 1U;
+        input.source = channels::kRemoteInputWfly;
+        input.chassis_x = NormalizeWflyChannel(wfly_frame.channels[2]);
+        input.chassis_rotate = NormalizeWflyChannel(wfly_frame.channels[3]);
+        input.yaw_angle = NormalizeWflyChannel(wfly_frame.channels[0]);
+        input.pitch_angle = NormalizeWflyChannel(wfly_frame.channels[1]);
+        if (ShouldLogRemoteInput(sequence)) {
+        //   LOG_INF("wfly raw seq=%u ch0=%u ch1=%u ch2=%u ch3=%u ch4=%u ch5=%u "
+        //           "lost=%u failsafe=%u",
+        //           sequence, wfly_frame.channels[0], wfly_frame.channels[1],
+        //           wfly_frame.channels[2], wfly_frame.channels[3],
+        //           wfly_frame.channels[4], wfly_frame.channels[5],
+        //           wfly_frame.frame_lost ? 1U : 0U,
+        //           wfly_frame.failsafe ? 1U : 0U);
+        }
+        PublishRemoteState(&input);
+        ConsumeBinary(protocols::remote_input::wfly_sbus::kFrameLength);
+        continue;
+      }
 
-		if (binary_len_ >= protocols::remote_input::dr16::kFrameLength) {
-			protocols::remote_input::dr16::Dr16Frame dr16_frame = {};
-			if (protocols::remote_input::dr16::DecodeFrame(binary_buf_, binary_len_, &dr16_frame)) {
-				input.source = channels::kRemoteInputDr16;
-				input.axis_lx = dr16_frame.left_stick_x;
-				input.axis_ly = dr16_frame.left_stick_y;
-				input.axis_wheel = dr16_frame.wheel;
-				input.chassis_enable = dr16_frame.chassis_enable ? 1U : 0U;
-				input.sequence = ++publish_sequence_;
-				latest_input_ = input;
-				latest_input_valid_ = true;
-				(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
-				ConsumeBinary(protocols::remote_input::dr16::kFrameLength);
-				continue;
-			}
-		}
+      ConsumeBinary(1U);
+      continue;
+    }
 
-		if (binary_len_ < protocols::remote_input::dr16::kFrameLength) {
-			break;
-		}
+    if ((binary_len_ >= protocols::remote_input::vt03::kRemoteFrameLength) &&
+        (binary_buf_[0] == 0xa9U) && (binary_buf_[1] == 0x53U)) {
+      protocols::remote_input::vt03::Vt03Frame vt03_frame = {};
+      if (protocols::remote_input::vt03::DecodeRemoteFrame(
+              binary_buf_, binary_len_, &vt03_frame)) {
+        input.source = channels::kRemoteInputVt03;
+        input.chassis_x = vt03_frame.left_y;
+        input.chassis_rotate = vt03_frame.left_x;
+        input.yaw_angle = vt03_frame.right_x;
+        input.pitch_angle = vt03_frame.right_y;
+        PublishRemoteState(&input);
+        ConsumeBinary(protocols::remote_input::vt03::kRemoteFrameLength);
+        continue;
+      }
+      ConsumeBinary(1U);
+      continue;
+    }
 
-		ConsumeBinary(1U);
-	}
+    if ((binary_len_ >= protocols::remote_input::vt03::kCustomFrameLength) &&
+        (binary_buf_[0] == 0xa5U)) {
+      protocols::remote_input::vt03::Vt03CustomFrame custom = {};
+      if (protocols::remote_input::vt03::DecodeCustomFrame(
+              binary_buf_, binary_len_, &custom)) {
+        input.source = channels::kRemoteInputVt03;
+        input.yaw_angle = custom.joystick_x;
+        input.pitch_angle = custom.joystick_y;
+        PublishRemoteState(&input);
+        ConsumeBinary(protocols::remote_input::vt03::kCustomFrameLength);
+        continue;
+      }
+    }
+
+    if (binary_len_ >= protocols::remote_input::dr16::kFrameLength) {
+      protocols::remote_input::dr16::Dr16Frame dr16_frame = {};
+      if (protocols::remote_input::dr16::DecodeFrame(binary_buf_, binary_len_,
+                                                     &dr16_frame)) {
+        input.source = channels::kRemoteInputDr16;
+        input.chassis_x = dr16_frame.left_stick_y;
+        input.chassis_rotate = dr16_frame.left_stick_x;
+        input.yaw_angle = dr16_frame.right_stick_x;
+        input.pitch_angle = dr16_frame.right_stick_y;
+        PublishRemoteState(&input);
+        ConsumeBinary(protocols::remote_input::dr16::kFrameLength);
+        continue;
+      }
+    }
+
+    if (binary_len_ < protocols::remote_input::dr16::kFrameLength) {
+      break;
+    }
+
+    ConsumeBinary(1U);
+  }
 }
 
-void RemoteInputModule::DecodeUartFramesInQueue()
-{
-	while (true) {
-		channels::uart_raw_frame_queue::UartRawFrameMessage frame = {};
-		if (channels::uart_raw_frame_queue::DequeueForRemoteInput(&frame) != 0) {
-			break;
-		}
+void RemoteInputModule::DecodeUartBytesFromRing() {
+  while (true) {
+    uint8_t data[64] = {};
+    uint32_t read_len =
+        ring_buf_get(&channels::uart_raw_frame_queue::remote_input_ring_buf,
+                     data, static_cast<uint32_t>(sizeof(data)));
+    if (read_len == 0U) {
+      if (k_sem_take(&channels::uart_raw_frame_queue::remote_input_sem,
+                     K_MSEC(20)) != 0) {
+        break;
+      }
 
-		for (uint8_t i = 0U; i < frame.len; ++i) {
-			const uint8_t byte = frame.data[i];
+      read_len =
+          ring_buf_get(&channels::uart_raw_frame_queue::remote_input_ring_buf,
+                       data, static_cast<uint32_t>(sizeof(data)));
+    }
 
-			if (binary_len_ < kBinaryBufSize) {
-				binary_buf_[binary_len_++] = byte;
-			} else {
-				memmove(binary_buf_, binary_buf_ + 1, kBinaryBufSize - 1U);
-				binary_buf_[kBinaryBufSize - 1U] = byte;
-			}
+    const size_t len = static_cast<size_t>(read_len);
+    if (len == 0U) {
+      break;
+    }
 
-			TryDecodeBinaryFrames();
+    for (size_t i = 0U; i < len; ++i) {
+      const uint8_t byte = data[i];
 
-			if (byte == '\r') {
-				continue;
-			}
+      if (binary_len_ < kBinaryBufSize) {
+        binary_buf_[binary_len_++] = byte;
+      } else {
+        memmove(binary_buf_, binary_buf_ + 1, kBinaryBufSize - 1U);
+        binary_buf_[kBinaryBufSize - 1U] = byte;
+      }
 
-			if (byte == '\n') {
-				line_buf_[line_pos_] = '\0';
-				if (line_pos_ > 0U) {
-					channels::RemoteInputMessage input = {};
-					if (ParseLine(line_buf_, &input) == 0) {
-						latest_input_ = input;
-						latest_input_valid_ = true;
-						(void)zbus_chan_pub(&rm_test_remote_input_chan, &input, K_NO_WAIT);
-					}
-				}
-				line_pos_ = 0U;
-				line_buf_[0] = '\0';
-				continue;
-			}
+      TryDecodeBinaryFrames();
 
-			if (isprint(byte) == 0) {
-				continue;
-			}
+      if (byte == '\r') {
+        continue;
+      }
 
-			if (line_pos_ < (kLineBufSize - 1U)) {
-				line_buf_[line_pos_++] = static_cast<char>(byte);
-			} else {
-				line_pos_ = 0U;
-				line_buf_[0] = '\0';
-			}
-		}
-	}
+      if (byte == '\n') {
+        line_buf_[line_pos_] = '\0';
+        if (line_pos_ > 0U) {
+          channels::RemoteInputState input = {};
+          if (ParseLine(line_buf_, &input) == 0) {
+            PublishRemoteState(&input);
+          }
+        }
+        line_pos_ = 0U;
+        line_buf_[0] = '\0';
+        continue;
+      }
+
+      if (isprint(byte) == 0) {
+        continue;
+      }
+
+      if (line_pos_ < (kLineBufSize - 1U)) {
+        line_buf_[line_pos_++] = static_cast<char>(byte);
+      } else {
+        line_pos_ = 0U;
+        line_buf_[0] = '\0';
+      }
+    }
+  }
 }
 
-channels::ChassisCommandMessage RemoteInputModule::ComposeChassisCommand(
-	const channels::RemoteInputMessage &input) const
-{
-	channels::ChassisCommandMessage command = {};
+void RemoteInputModule::PublishRemoteState(channels::RemoteInputState *input) {
+  if (input == nullptr) {
+    return;
+  }
 
-	if (input.chassis_enable == 0U) {
-		command.source = channels::kInputSourceUnknown;
-		return command;
-	}
+  input->sequence = ++publish_sequence_;
+  latest_remote_state.write(*input);
+  if (!ShouldLogRemoteInput(input->sequence)) {
+    return;
+  }
 
-	switch (input.source) {
-	case channels::kRemoteInputDr16:
-		command.target_vx = input.axis_lx * kChassisSpeedScale;
-		command.target_vy = -input.axis_ly * kChassisSpeedScale;
-		command.target_wz = input.axis_wheel * kChassisSpeedScale;
-		command.source = channels::kInputSourceDr16;
-		break;
-	case channels::kRemoteInputVt03:
-		command.target_vx = -input.axis_jx * kChassisSpeedScale;
-		command.target_vy = input.axis_jy * kChassisSpeedScale;
-		command.target_wz = input.axis_jz * kChassisSpeedScale * kVt03SpinScale;
-		command.source = channels::kInputSourceVt03;
-		break;
-	default:
-		command.source = channels::kInputSourceUnknown;
-		break;
-	}
-
-	return command;
+//   LOG_INF("remote_input source=%s seq=%u chassis_x=%d chassis_rotate=%d "
+//           "yaw=%d pitch=%d",
+//           RemoteInputSourceName(input->source), input->sequence,
+//           AxisMilli(input->chassis_x), AxisMilli(input->chassis_rotate),
+//           AxisMilli(input->yaw_angle), AxisMilli(input->pitch_angle));
 }
 
-channels::ArmCommandMessage RemoteInputModule::ComposeArmCommand(
-	const channels::RemoteInputMessage &input) const
-{
-	channels::ArmCommandMessage command = {};
-
-	if (input.chassis_enable == 0U) {
-		command.source = channels::kInputSourceUnknown;
-		return command;
-	}
-
-	switch (input.source) {
-	case channels::kRemoteInputDr16:
-		command.claw_delta = input.axis_wheel * 0.003f;
-		command.elbow_yaw_delta = input.axis_lx * 0.003f;
-		command.elbow_pitch_delta = input.axis_ly * 0.003f;
-		command.wrist_twist_delta = 0.0f;
-		command.wrist_flip_delta = 0.0f;
-		command.source = channels::kInputSourceDr16;
-		command.enable = 1U;
-		break;
-	case channels::kRemoteInputVt03:
-		command.claw_delta = 0.0f;
-		command.elbow_yaw_delta = input.axis_jx * 0.003f;
-		command.elbow_pitch_delta = 0.0f;
-		command.wrist_twist_delta = input.axis_jz * 0.003f;
-		command.wrist_flip_delta = input.axis_jy * 0.003f;
-		command.source = channels::kInputSourceVt03;
-		command.enable = 1U;
-		break;
-	default:
-		command.source = channels::kInputSourceUnknown;
-		break;
-	}
-
-	return command;
-}
-
-channels::GimbalCommandMessage RemoteInputModule::ComposeGimbalCommand(
-	const channels::RemoteInputMessage &input) const
-{
-	channels::GimbalCommandMessage command = {};
-
-	if ((input.chassis_enable == 0U) || (input.source != channels::kRemoteInputVt03)) {
-		command.source = channels::kInputSourceUnknown;
-		return command;
-	}
-
-	command.yaw_delta_deg = input.axis_jx * 1.2f;
-	command.pitch_delta_deg = input.axis_jy * 0.8f;
-	command.source = channels::kInputSourceVt03;
-	command.enable = 1U;
-	return command;
-}
-
-channels::GantryCommandMessage RemoteInputModule::ComposeGantryCommand(
-	const channels::RemoteInputMessage &input) const
-{
-	channels::GantryCommandMessage command = {};
-
-	if (input.chassis_enable == 0U) {
-		command.source = channels::kInputSourceUnknown;
-		return command;
-	}
-
-	switch (input.source) {
-	case channels::kRemoteInputDr16:
-		command.x_delta = input.axis_lx * 0.02f;
-		command.y_delta = input.axis_ly * 0.02f;
-		command.z_delta = input.axis_wheel * 0.01f;
-		command.source = channels::kInputSourceDr16;
-		command.enable = 1U;
-		break;
-	case channels::kRemoteInputVt03:
-		command.x_delta = input.axis_jx * 0.02f;
-		command.y_delta = input.axis_jy * 0.02f;
-		command.z_delta = input.axis_jz * 0.01f;
-		command.source = channels::kInputSourceVt03;
-		command.enable = 1U;
-		break;
-	default:
-		command.source = channels::kInputSourceUnknown;
-		break;
-	}
-
-	return command;
-}
-
-}  // namespace modules::remote_input
+} // namespace modules::remote_input
