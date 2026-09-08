@@ -10,6 +10,9 @@ function(wbr_add_module_sources config_symbol directory)
     # Keep superseded controller sources available for reference without
     # compiling them into the firmware.
     list(FILTER module_sources EXCLUDE REGEX "/legacy/")
+    # MPC is retained as an application-owned implementation for a future
+    # CPU1 or host transport, but CPU0's chassis module remains LQR-only.
+    list(FILTER module_sources EXCLUDE REGEX "/chassis/mpc/")
     set(WBR_CONTROL_MODULES_SOURCES
       ${WBR_CONTROL_MODULES_SOURCES} ${module_sources}
       PARENT_SCOPE
@@ -24,6 +27,7 @@ wbr_add_module_sources(CONFIG_WBR_CONTROL_MODULE_OSCILLOSCOPE oscilloscope)
 wbr_add_module_sources(CONFIG_WBR_CONTROL_MODULE_REFEREE referee)
 wbr_add_module_sources(CONFIG_WBR_CONTROL_MODULE_REMOTE_INPUT remote_input)
 wbr_add_module_sources(CONFIG_WBR_CONTROL_MODULE_SYS_STATE sys_state)
+wbr_add_module_sources(CONFIG_WBR_CONTROL_MODULE_SDLOG sdlog)
 
 zephyr_library_named(wbr_modules)
 zephyr_library_sources(${WBR_CONTROL_MODULES_SOURCES})
@@ -33,6 +37,7 @@ target_include_directories(wbr_modules
     ${PROJECT_SOURCE_DIR}/src
 )
 target_include_directories(wbr_modules SYSTEM PRIVATE ${EIGEN_DIR})
+target_include_directories(wbr_modules SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/../fatfs/include)
 if(EXISTS ${SOPHUS_DIR}/sophus/so3.hpp)
   target_include_directories(wbr_modules SYSTEM PRIVATE ${SOPHUS_DIR})
 endif()

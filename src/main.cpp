@@ -23,6 +23,7 @@
 #include "modules/referee/referee_module.h"
 #include "modules/remote_input/remote_input_module.h"
 #include "modules/sys_state/sys_state_module.h"
+#include "modules/sdlog/sdlog_module.h"
 #include <channels/system_status_channel.h>
 #include <platform/board/board_identity.h>
 
@@ -30,10 +31,6 @@ LOG_MODULE_REGISTER(app_main, LOG_LEVEL_INF);
 
 #if defined(CONFIG_WBR_CONTROL_RUNTIME_INIT_CAN) && CONFIG_WBR_CONTROL_RUNTIME_INIT_CAN
 #include <platform/drivers/communication/can_dispatch.h>
-#endif
-
-#if defined(CONFIG_WBR_CONTROL_RUNTIME_INIT_LITTLEFS) && CONFIG_WBR_CONTROL_RUNTIME_INIT_LITTLEFS
-#include <platform/storage/filesystem/littlefs_service.h>
 #endif
 
 #if defined(CONFIG_WBR_CONTROL_RUNTIME_INIT_USB) && CONFIG_WBR_CONTROL_RUNTIME_INIT_USB
@@ -92,15 +89,6 @@ int main(void)
 				LOG_ERR("usb_session init failed: %d", rc);
 				return rc;
 			}
-		}
-	}
-#endif
-
-#if defined(CONFIG_WBR_CONTROL_RUNTIME_INIT_LITTLEFS) && CONFIG_WBR_CONTROL_RUNTIME_INIT_LITTLEFS
-	if (IS_ENABLED(CONFIG_WBR_CONTROL_RUNTIME_INIT_LITTLEFS)) {
-		rc = platform::InitializeLittlefs();
-		if (rc != 0) {
-			LOG_WRN("littlefs init skipped: %d", rc);
 		}
 	}
 #endif
@@ -180,6 +168,17 @@ int main(void)
 			return rc;
 		}
 		++module_count;
+	}
+#endif
+#if defined(CONFIG_WBR_CONTROL_MODULE_SDLOG) && CONFIG_WBR_CONTROL_MODULE_SDLOG
+	{
+		static modules::SdLogModule sdlog_module;
+		rc = sdlog_module.Start();
+		if (rc != 0) {
+			LOG_WRN("module start skipped: sdlog (%d)", rc);
+		} else {
+			++module_count;
+		}
 	}
 #endif
 	PublishSystemStatus(channels::kRunning, module_count);

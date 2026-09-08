@@ -20,6 +20,9 @@ struct ChassisRealtimeStatus {
 	uint32_t deadline_miss_count;
 	uint32_t loop_execution_us;
 	uint32_t max_loop_execution_us;
+	uint32_t loop_period_us;
+	uint32_t min_loop_period_us;
+	uint32_t max_loop_period_us;
 	uint32_t stack_unused_bytes;
 	uint64_t imu_age_us;
 	ChassisImuSource imu_source;

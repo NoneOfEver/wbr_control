@@ -472,25 +472,25 @@ void CanRxCallback(const struct device *dev, struct can_frame *frame, void *user
 	if (bus == 0U) {
 
 	} else if (bus == 1U) {
-		switch (static_cast<uint16_t>(frame->id)) {
-		case kRightWheelId:
-			right_wheel_feedback_raw.write(rx_frame);
-			routed = true;
-			routed_slot = static_cast<size_t>(platform::CanTxSlot::kRightWheel);
-			break;
-		default:
-			break;
-		}
-		if (!routed && (frame->id == kRightJointBMasterId)) {
-			right_b_motor_feedback_raw.write(rx_frame);
-			routed = true;
-			routed_slot = static_cast<size_t>(platform::CanTxSlot::kRightJointB);
-		} else if (!routed && (frame->id == kRightJointDMasterId)) {
-			right_d_motor_feedback_raw.write(rx_frame);
-			routed = true;
-			routed_slot = static_cast<size_t>(platform::CanTxSlot::kRightJointD);
-		}
 	} else if (bus == 2U) {
+		switch (static_cast<uint16_t>(frame->id)) {
+			case kRightWheelId:
+				right_wheel_feedback_raw.write(rx_frame);
+				routed = true;
+				routed_slot = static_cast<size_t>(platform::CanTxSlot::kRightWheel);
+				break;
+			default:
+				break;
+			}
+			if (!routed && (frame->id == kRightJointBMasterId)) {
+				right_b_motor_feedback_raw.write(rx_frame);
+				routed = true;
+				routed_slot = static_cast<size_t>(platform::CanTxSlot::kRightJointB);
+			} else if (!routed && (frame->id == kRightJointDMasterId)) {
+				right_d_motor_feedback_raw.write(rx_frame);
+				routed = true;
+				routed_slot = static_cast<size_t>(platform::CanTxSlot::kRightJointD);
+			}
 
 	} else if (bus == 3U) {
 		switch (static_cast<uint16_t>(frame->id)) {

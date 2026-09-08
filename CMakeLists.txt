@@ -11,6 +11,7 @@ set(HPM_ENV_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../sdk_env)
 set(EIGEN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../eigen)
 # Sophus：纯头文件李群库，作为 west project 位于 workspace 根（../sophus）。
 set(SOPHUS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../sophus)
+set(FATFS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../fatfs)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -31,6 +32,7 @@ target_include_directories(app PRIVATE
   ${PROJECT_SOURCE_DIR}/src
 )
 target_include_directories(app SYSTEM PRIVATE ${EIGEN_DIR})
+target_include_directories(app SYSTEM PRIVATE ${FATFS_DIR}/include)
 if(EXISTS ${SOPHUS_DIR}/sophus/so3.hpp)
   target_include_directories(app SYSTEM PRIVATE ${SOPHUS_DIR})
 endif()

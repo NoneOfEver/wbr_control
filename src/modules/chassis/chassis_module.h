@@ -195,6 +195,9 @@ private:
 	uint32_t deadline_miss_count_ = 0U;
 	uint32_t realtime_status_sequence_ = 0U;
 	uint32_t max_loop_execution_us_ = 0U;
+	uint32_t loop_period_us_ = 0U;
+	uint32_t min_loop_period_us_ = UINT32_MAX;
+	uint32_t max_loop_period_us_ = 0U;
 	ControlState control_state_ = ControlState::kDisabled;
 	DmArmResetReason dm_arm_reset_reason_ = DmArmResetReason::kStartup;
 	bool balance_phase_reached_ = false;

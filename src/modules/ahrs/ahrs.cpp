@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include <zephyr/timing/timing.h>
+#include <zephyr/devicetree.h>
 
 #include <channels/onboard_imu_sample.hpp>
 #include <channels/oscilloscope_sample.hpp>
@@ -22,6 +23,12 @@
 #include <scheduling/thread_priorities.h>
 
 #if defined(CONFIG_WBR_CONTROL_MODULE_AHRS)
+
+#define ONBOARD_IMU_HEATER_NODE DT_ALIAS(onboard_imu_heater)
+
+#if !DT_NODE_EXISTS(ONBOARD_IMU_HEATER_NODE)
+#error "Define devicetree alias onboard-imu-heater for the IMU heater MOSFET"
+#endif
 
 namespace {
 constexpr size_t kAxisCount = 3U;
@@ -42,6 +49,16 @@ constexpr uint32_t kMaximumSaneSampleIntervalUs = 5000U;
  */
 constexpr float kCalibrationAccelToleranceMps2 = 2.0F;
 constexpr float kCalibrationGyroLimitRadS = 0.1F;
+constexpr float kTemperatureTargetC = 45.0F;
+constexpr float kTemperatureCalibrationWindowC = 0.5F;
+constexpr float kTemperatureCutoffC = 80.0F;
+constexpr float kTemperatureMinimumC = -40.0F;
+constexpr float kTemperatureMaximumC = 100.0F;
+constexpr float kTemperatureMaxDutyPercent = 100.0F;
+/* The measured plant reaches about 88 degC at continuous full power;
+ * the independent 80 degC cutoff remains the safety limit. */
+constexpr float kTemperatureKp = 10.0F;
+constexpr float kTemperatureKi = 0.5F;
 K_THREAD_STACK_DEFINE(g_ahrs_stack, 4096);
 
 int16_t DecodeBigEndian(const uint8_t *bytes)
@@ -59,10 +76,19 @@ int Ahrs::Start()
 		return 0;
 	}
 
-	int rc = imu_.Init();
+	imu_heater_pwm_ = PWM_DT_SPEC_GET(ONBOARD_IMU_HEATER_NODE);
+	/* Disable heat before sensor initialization, including failure paths. */
+	int rc = SetImuHeaterDutyPercent(0U);
 	if (rc != 0) {
 		return rc;
 	}
+
+	rc = imu_.Init();
+	if (rc != 0) {
+		return rc;
+	}
+	temperature_integral_ = 0.0F;
+	temperature_control_ready_ = false;
 
 	/* Proven 1 kHz tuning from the previous BMI088 implementation.  The
 	 * surrounding port keeps the newer finite-value, covariance and timing
@@ -83,18 +109,81 @@ int Ahrs::Start()
 			    "ahrs");
 }
 
+int Ahrs::SetImuHeaterDutyPercent(uint8_t duty_percent)
+{
+	if (imu_heater_pwm_.dev == nullptr || !device_is_ready(imu_heater_pwm_.dev)) {
+		return -ENODEV;
+	}
+	if (duty_percent > 100U) {
+		return -EINVAL;
+	}
+	const int rc = pwm_set_dt(&imu_heater_pwm_, imu_heater_pwm_.period,
+				  imu_heater_pwm_.period * duty_percent / 100U);
+	if (rc == 0) {
+		imu_heater_duty_percent_ = static_cast<float>(duty_percent);
+	}
+	return rc;
+}
+
 void Ahrs::RunLoop()
 {
 	wbr_control::scheduling::AbsolutePeriodicSchedule release(kAhrsPeriodMs, 0U);
+	uint32_t missing_sample_ms = 0U;
 	for (;;) {
 		(void)release.WaitForNextRelease();
 		OnboardImu::Burst burst = {};
 		const bool sample_ready = imu_.TryTakeCompleted(burst);
 		(void)imu_.TryStartAsync();
 		if (sample_ready) {
+			missing_sample_ms = 0U;
 			ProcessBurst(burst);
+			UpdateImuTemperatureControl(kNominalSampleIntervalUs * 1.0e-6F);
+			//PublishTelemetry();
+		} else if (++missing_sample_ms >= 10U) {
+			/* No fresh temperature feedback: fail safe to heater off. */
+			temperature_integral_ = 0.0F;
+			temperature_control_ready_ = false;
+			(void)SetImuHeaterDutyPercent(0U);
 		}
 	}
+}
+
+void Ahrs::UpdateImuTemperatureControl(float dt_seconds)
+{
+	if (!std::isfinite(imu_temperature_c_) ||
+	    imu_temperature_c_ < kTemperatureMinimumC ||
+	    imu_temperature_c_ > kTemperatureMaximumC ||
+	    imu_temperature_c_ >= kTemperatureCutoffC) {
+		temperature_integral_ = 0.0F;
+		temperature_control_ready_ = false;
+		(void)SetImuHeaterDutyPercent(0U);
+		return;
+	}
+
+	if (!temperature_control_ready_) {
+		previous_temperature_c_ = imu_temperature_c_;
+		temperature_control_ready_ = true;
+	}
+
+	const float error = kTemperatureTargetC - imu_temperature_c_;
+	const float candidate_integral = temperature_integral_ + error * dt_seconds;
+	const float proportional = kTemperatureKp * error;
+	const float unclamped = proportional + kTemperatureKi * candidate_integral;
+	const float duty = fminf(kTemperatureMaxDutyPercent, fmaxf(0.0F, unclamped));
+
+	/* Integrate only while it cannot drive further into the active clamp. */
+	if ((unclamped >= 0.0F && unclamped <= kTemperatureMaxDutyPercent) ||
+	    (unclamped < 0.0F && error > 0.0F) ||
+	    (unclamped > kTemperatureMaxDutyPercent && error < 0.0F)) {
+		temperature_integral_ = candidate_integral;
+	}
+
+	if (SetImuHeaterDutyPercent(static_cast<uint8_t>(duty + 0.5F)) != 0) {
+		temperature_integral_ = 0.0F;
+		temperature_control_ready_ = false;
+		(void)SetImuHeaterDutyPercent(0U);
+	}
+	previous_temperature_c_ = imu_temperature_c_;
 }
 void Ahrs::PublishTelemetry()
 {
@@ -102,17 +191,20 @@ void Ahrs::PublishTelemetry()
 	channels::OscilloscopeSample sample = {};
 	sample.sequence = ++ sequence;
 	sample.uptime_ms = k_uptime_get_32();
-	sample.channel_count = 3;
+	sample.channel_count = 5;
 
 	sample.value[0] = ekf_.PitchDeg();
 	sample.value[1] = ekf_.YawDeg();
 	sample.value[2] = ekf_.RollDeg();
+	sample.value[3] = imu_temperature_c_;
+	sample.value[4] = imu_heater_duty_percent_;
 	channels::latest_oscilloscope_sample.write(sample);
 }
 
 void Ahrs::ProcessBurst(const OnboardImu::Burst &burst)
 {
 	const uint8_t *const rx_data = burst.rx;
+	imu_temperature_c_ = burst.temperature_c;
 	const uint32_t data_ready_cycle = burst.data_ready_cycle;
 	int16_t sensor_accel_raw[kAxisCount];
 	int16_t sensor_gyro_raw[kAxisCount];
@@ -151,6 +243,13 @@ void Ahrs::ProcessBurst(const OnboardImu::Burst &burst)
 	const float dt_seconds = UpdateSampleInterval(data_ready_cycle);
 
 	if (!calibrated_) {
+		/* Accumulate only samples captured inside the target-temperature
+		 * window. Samples outside it are skipped without losing progress. */
+		if (fabsf(imu_temperature_c_ - kTemperatureTargetC) >
+		    kTemperatureCalibrationWindowC) {
+			PublishSample(data_ready_cycle);
+			return;
+		}
 		const float accel_norm = sqrtf(accel_mps2[0] * accel_mps2[0] +
 					       accel_mps2[1] * accel_mps2[1] +
 					       accel_mps2[2] * accel_mps2[2]);
@@ -219,7 +318,6 @@ void Ahrs::ProcessBurst(const OnboardImu::Burst &burst)
 		}
 	}
 	PublishSample(data_ready_cycle);
-	PublishTelemetry();
 }
 
 float Ahrs::UpdateSampleInterval(uint32_t data_ready_cycle)

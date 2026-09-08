@@ -131,11 +131,11 @@ constexpr SidePair<LegHardwareMap> kLegHardware = {
 		},
 	.right =
 		{
-			.wheel = {1U, 0x201U, platform::CanTxSlot::kRightWheel},
+			.wheel = {2U, 0x201U, platform::CanTxSlot::kRightWheel},
 			.joint =
 				{
-					.b = {1U, 0x01U, platform::CanTxSlot::kRightJointB},
-					.d = {1U, 0x02U, platform::CanTxSlot::kRightJointD},
+					.b = {2U, 0x01U, platform::CanTxSlot::kRightJointB},
+					.d = {2U, 0x02U, platform::CanTxSlot::kRightJointD},
 				},
 			.kinematic_branch = -1,
 			.leg_angle_offset = -3.121010,
@@ -338,6 +338,9 @@ ChassisModule::ChassisModule()
 	deadline_miss_count_ = 0U;
 	realtime_status_sequence_ = 0U;
 	max_loop_execution_us_ = 0U;
+	loop_period_us_ = 0U;
+	min_loop_period_us_ = UINT32_MAX;
+	max_loop_period_us_ = 0U;
 	control_state_ = ControlState::kDisabled;
 	balance_phase_reached_ = false;
 	stool_ready_ = false;
@@ -599,7 +602,6 @@ void ChassisModule::UpdateControlState(const CycleInput &input)
 void ChassisModule::ComputeControlOutput(const CycleInput &input, CycleOutput &output)
 {
 	output = {};
-
 	if (control_state_ == ControlState::kStool) {
 		// 撑起状态负责腿长收缩、腿角对齐和关节级联 PID。
 		target_leg_length_ = StoolController::kTargetLegLength;
@@ -936,33 +938,36 @@ void ChassisModule::SendScheduledOutputs(const SidePair<JointPair<double>> &join
 void ChassisModule::PublishTelemetry(const CycleInput &input, const CycleOutput &output)
 {
 	// 保持既有 VOFA 状态码，DM 重新使能原因由独立通道输出。
-	float balance_state_x100 = 0.0F;
+	float balance_state_x10 = 0.0F;
 	const bool control_enabled = input.requested_enable && input.feedback_valid &&
 				     !tilt_fault_latched_ && input.arm_complete && input.dm_ready;
 	if (input.requested_enable) {
-		balance_state_x100 =
+		balance_state_x10 =
 			tilt_fault_latched_
-				? 400.0F
+				? 40.0F
 				: (!input.arm_complete
-					   ? 110.0F
+					   ? 11.0F
 					   : (!input.feedback_valid
-						      ? 120.0F
+						      ? 12.0F
 						      : (!control_enabled
-								 ? 130.0F
+								 ? 13.0F
 								 : (control_state_ == ControlState::
 											      kStool
-									    ? 200.0F
-									    : 300.0F))));
+									    ? 20.0F
+									    : 30.0F))));
 	}
 
 	static uint32_t sequence = 0U;
 	channels::OscilloscopeSample sample = {};
 	sample.sequence = ++sequence;
 	sample.uptime_ms = k_uptime_get_32();
-	sample.channel_count = 2;
+	sample.channel_count = 5;
 
-	sample.value[0] = input.imu.pitch_deg;
-	sample.value[1] = input.imu.pitch_rate_rad_s;
+	sample.value[0] = balance_state_x10;
+	sample.value[1] = input.pitch / kDegToRad;
+	sample.value[2] = input.pitch_rate / kDegToRad;
+	sample.value[3] = input.common_theta / kDegToRad;
+	sample.value[4] = input.common_theta_rate / kDegToRad;
 	channels::latest_oscilloscope_sample.write(sample);
 }
 
@@ -988,6 +993,9 @@ void ChassisModule::PublishRealtimeStatus(const CycleInput &input,
 		k_cyc_to_us_floor32(k_cycle_get_32() - loop_start_cycle);
 	max_loop_execution_us_ = MAX(max_loop_execution_us_, status.loop_execution_us);
 	status.max_loop_execution_us = max_loop_execution_us_;
+	status.loop_period_us = loop_period_us_;
+	status.min_loop_period_us = min_loop_period_us_ == UINT32_MAX ? 0U : min_loop_period_us_;
+	status.max_loop_period_us = max_loop_period_us_;
 	channels::latest_chassis_realtime_status.write(status);
 }
 
@@ -1008,6 +1016,11 @@ void ChassisModule::RunLoop()
 
 		// 使用实际周期并限制异常调度延迟，避免冲击积分器和滤波器。
 		const uint64_t now_us = k_cyc_to_us_floor64(k_cycle_get_64());
+		if (last_loop_time_us_ != 0U && now_us > last_loop_time_us_) {
+			loop_period_us_ = static_cast<uint32_t>(now_us - last_loop_time_us_);
+			min_loop_period_us_ = MIN(min_loop_period_us_, loop_period_us_);
+			max_loop_period_us_ = MAX(max_loop_period_us_, loop_period_us_);
+		}
 		const uint32_t now_ms = k_uptime_get_32();
 		double dt = kDefaultDt;
 		if (last_loop_time_us_ != 0U && now_us > last_loop_time_us_) {
@@ -1022,7 +1035,7 @@ void ChassisModule::RunLoop()
 		UpdateControlState(input);
 		ComputeControlOutput(input, output);
 		ApplyControlOutput(output);
-		//PublishTelemetry(input, output);
+		PublishTelemetry(input, output);
 		++loop_ticks_;
 		if ((loop_ticks_ % kRealtimeStatusPeriodTicks) == 0U) {
 			PublishRealtimeStatus(input, loop_start_cycle);
