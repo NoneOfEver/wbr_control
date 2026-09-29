@@ -25,7 +25,7 @@ manifest:
     - name: dust-mavlink
       url-base: https://github.com/NoneOfEver
     - name: dust-hpm
-      url-base: https://github.com/NoneOfEver
+      url-base: https://github.com/HNUST-Dust
     # Eigen 官方仓库在 GitLab（GitHub 的 eigenteam/eigen-git-mirror 已停更在 3.3.7）。
     - name: eigen
       url-base: https://gitlab.com
