@@ -43,9 +43,9 @@ class RobotParameters:
     half_track_m: float = 0.215
     leg_mass_each_kg: float = 1.033
     body_mass_kg: float = 8.788
-    body_pitch_inertia_kg_m2: float = 0.133703941
-    body_yaw_inertia_kg_m2: float = 0.219437247
-    body_com_offset_m: float = -0.05235
+    body_pitch_inertia_kg_m2: float = 0.144238029
+    body_yaw_inertia_kg_m2: float = 0.229853812
+    body_com_offset_m: float = -0.05327
     gravity_m_s2: float = 9.80665
 
 
