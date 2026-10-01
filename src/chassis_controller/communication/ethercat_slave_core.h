@@ -20,6 +20,7 @@ struct ChassisSample {
 	float left_support_force_n = 0.0F;
 	float right_support_force_n = 0.0F;
 	uint32_t status_flags = 0U;
+	uint8_t motor_stale_mask = 0U;
 };
 
 struct ChassisMpcCommand {

@@ -32,6 +32,8 @@ enum MpcLinkStateValidFlag : uint8_t {
 	kMpcStateSupportForceValid = 1U << 1,
 	kMpcStateMotorFeedbackValid = 1U << 2,
 	kMpcStateControlEnabled = 1U << 3,
+	kMpcStateOperatorEnabled = 1U << 4,
+	kMpcStateActiveApplied = 1U << 5,
 };
 
 enum MpcLinkContactFlag : uint8_t {
@@ -75,6 +77,7 @@ struct MpcLinkState {
 	uint8_t control_state = 0U;
 	uint8_t valid_flags = 0U;
 	uint8_t contact_flags = 0U;
+	uint8_t motor_stale_mask = 0U;
 };
 
 struct MpcLinkCommand {

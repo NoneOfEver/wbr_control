@@ -173,7 +173,7 @@ actuator:
 safety:
   remote_timeout_ms: 1000
   imu_timeout_ms: 3
-  motor_timeout_us: 2000
+  motor_timeout_us: 3000
   tilt_cutoff_deg: 75.0
   dm_clear_ticks: 50
   dm_arm_ticks: 300

@@ -131,7 +131,7 @@ int EncodeMpcLinkState(const MpcLinkState *state, uint8_t *out,
 	out[flags_offset] = state->control_state;
 	out[flags_offset + 1U] = state->valid_flags;
 	out[flags_offset + 2U] = state->contact_flags;
-	out[flags_offset + 3U] = 0U;
+	out[flags_offset + 3U] = state->motor_stale_mask;
 	WriteLe16(&out[kMpcLinkStateFrameSize - 2U],
 		  CalculateMpcLinkCrc16(out, kMpcLinkStateFrameSize - 2U));
 	*out_len = kMpcLinkStateFrameSize;
@@ -164,6 +164,7 @@ int DecodeMpcLinkState(const uint8_t *frame, size_t frame_len, MpcLinkState *out
 	out->control_state = frame[flags_offset];
 	out->valid_flags = frame[flags_offset + 1U];
 	out->contact_flags = frame[flags_offset + 2U];
+	out->motor_stale_mask = frame[flags_offset + 3U];
 	return 0;
 }
 

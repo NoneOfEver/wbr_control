@@ -2,3 +2,24 @@
 &cherryusb_usb0 {
 	status = "okay";
 };
+
+/*
+ * HPM6750 routes these peripherals through the RISC-V PLIC, where a larger
+ * numeric value has higher interrupt priority. Keep motor feedback ahead of
+ * USB traffic so USB activity cannot delay CAN receive handling.
+ */
+&can0 {
+	interrupts = <47 2>;
+};
+
+&can1 {
+	interrupts = <48 2>;
+};
+
+&can2 {
+	interrupts = <49 2>;
+};
+
+&can3 {
+	interrupts = <50 2>;
+};

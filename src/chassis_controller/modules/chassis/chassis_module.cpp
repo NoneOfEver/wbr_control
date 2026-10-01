@@ -348,7 +348,7 @@ void ChassisModule::PublishTelemetry(const ChassisCycleInput &input,
 	msg::OscilloscopeSample sample = {};
 	sample.sequence = ++telemetry_sequence_;
 	sample.uptime_ms = k_uptime_get_32();
-	sample.channel_count = 20;
+	sample.channel_count = msg::kOscilloscopeMaxChannels;
 
 	sample.value[0] = balance_state_x10;
 	// 腿长闭环。
@@ -384,6 +384,20 @@ void ChassisModule::PublishTelemetry(const ChassisCycleInput &input,
 		action_phase = 40.0F + static_cast<float>(recovery_controller_.phase());
 	}
 	sample.value[19] = action_phase;
+
+	/* The six motor slots use the CAN scheduler order:
+	 * left/right wheel, left B/D, right B/D. Keep the live VOFA frame focused
+	 * on the current feedback-staleness investigation; the heavier USB, PLIC,
+	 * worker and cumulative CAN diagnostics remain available internally. */
+	for (uint8_t slot = 0U; slot < 6U; ++slot) {
+		sample.value[20U + slot] =
+			static_cast<float>(input.motor_feedback_age_us[slot]);
+	}
+	sample.value[26] = static_cast<float>(input.motor_stale_mask);
+	for (uint8_t slot = 0U; slot < 6U; ++slot) {
+		sample.value[27U + slot] =
+			static_cast<float>(last_stale_trigger_age_us_[slot]);
+	}
 	msg::latest_oscilloscope_sample.write(sample);
 }
 
@@ -419,6 +433,7 @@ void ChassisModule::PublishEthercatSample(
 	    input.requested_enable && input.feedback_valid && input.imu_fresh) {
 		sample.status_flags |= protocols::ethercat::kStateControlEnabled;
 	}
+	sample.motor_stale_mask = input.motor_stale_mask;
 	EthercatChassisPort::Instance().PublishChassisSample(sample);
 }
 
@@ -483,6 +498,15 @@ void ChassisModule::RunLoop()
 		// 单周期流水线：输入快照 -> FSM -> 控制计算 -> 执行器 -> 遥测。
 		ChassisControlOutput output = {};
 		input_reader_.Read(input, now_ms, dt, actuator_.arm_complete());
+		const uint8_t newly_stale = static_cast<uint8_t>(
+			input.motor_stale_mask & ~previous_motor_stale_mask_);
+		for (uint8_t slot = 0U; slot < 6U; ++slot) {
+			if ((newly_stale & BIT(slot)) != 0U) {
+				last_stale_trigger_age_us_[slot] =
+					input.motor_feedback_age_us[slot];
+			}
+		}
+		previous_motor_stale_mask_ = input.motor_stale_mask;
 		const ChassisSupportForceEstimate support_force =
 			support_force_estimator_.Update(input);
 		const bool flight_detected = flight_controller_.UpdateLiftoffDetection(

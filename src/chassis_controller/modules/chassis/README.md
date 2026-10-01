@@ -52,12 +52,19 @@ it downward retracts them, and releasing it holds the current reference. The
 rate and minimum/maximum references are configured under `balance` in
 `chassis_params.yaml`.
 
-The chassis telemetry frame sends 20 channels: controller state; target, left/right
+The chassis telemetry frame sends 33 channels. Channels 0-19 contain controller state; target, left/right
 length and left/right length rate; measured roll, roll reference and roll compensation
 force; pitch; estimated forward speed, target/measured yaw rate; left/right wheel
 torque; left/right commanded axial force; left/right filtered support force; and one
 multiplexed action-phase channel. Action phase uses `10 + Flight`, `20 + Jump`,
 `30 + ClimbStairs`, or `40 + Recovery`; zero means no atomic action is active.
+
+Channels 20-25 are the current feedback ages for the left wheel, right wheel,
+left-B, left-D, right-B, and right-D motors in microseconds. Channel 26 is the
+current motor-stale bitmask in that order. Channels 27-32 latch the feedback age
+at the most recent fresh-to-stale transition. This compact production profile
+keeps the data needed to diagnose a control dropout without continuously
+publishing USB, interrupt-controller, or worker timing probes.
 
 Balance applies proportional roll compensation as equal and opposite additions to
 the two VMC axial support forces. The roll reference is synchronized on entry and

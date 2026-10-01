@@ -108,6 +108,8 @@ struct ChassisCycleInput {
 	uint32_t remote_age_ms = UINT32_MAX;
 	bool remote_fresh = false;
 	bool feedback_valid = false;
+	uint8_t motor_stale_mask = 0U; ///< Bits follow platform::CanTxSlot order.
+	uint32_t motor_feedback_age_us[6] = {}; ///< Same order as motor_stale_mask.
 	bool requested_enable = false;
 	bool dm_ready = false;
 	bool arm_complete = false;

@@ -10,6 +10,7 @@
  */
 
 #include <errno.h>
+#include <math.h>
 #include <string.h>
 
 #include <zephyr/devicetree.h>
@@ -28,6 +29,11 @@
 #include <chassis_controller/scheduling/thread_priorities.h>
 #include <protocols/pc_link/pc_link.h>
 #include <periodic_schedule.h>
+
+#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+#include <chassis_controller/modules/chassis/ethercat_chassis_port.h>
+#include <protocols/mpc_link/mpc_link.h>
+#endif
 
 #include "usbd_core.h"
 
@@ -53,7 +59,11 @@ constexpr uint8_t kVendorOutEp = 0x01U;
 constexpr uint8_t kVendorInterface = 0x00U;
 constexpr uint16_t kVendorPacketSize = 64U;
 constexpr uint8_t kVendorIntervalFs = 0x01U; /* 1 frame = 1 ms */
+#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+constexpr uint8_t kVendorIntervalHs = CONFIG_WBR_CONTROL_USB_MPC_HS_INTERVAL;
+#else
 constexpr uint8_t kVendorIntervalHs = 0x04U; /* 8 microframes = 1 ms */
+#endif
 
 #define WBR_CONTROL_VENDOR_INTERRUPT_DESCRIPTOR_LEN (9 + 7 + 7)
 #define WBR_CONTROL_USB_CONFIG_SIZE (9 + WBR_CONTROL_VENDOR_INTERRUPT_DESCRIPTOR_LEN)
@@ -64,7 +74,7 @@ static_assert(protocols::kPcCommSendPacketSize <= kVendorPacketSize,
 	      "PC telemetry must fit one Vendor Interrupt IN packet");
 
 USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX
-uint8_t g_vendor_read_buffer[protocols::kPcCommRecvPacketSize];
+uint8_t g_vendor_read_buffer[kVendorPacketSize];
 USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t g_vendor_tx_buffer[kVendorPacketSize];
 
 volatile bool g_started = false;
@@ -78,6 +88,11 @@ volatile bool g_pc_command_clear_requested = true;
 bool g_has_valid_pc_command = false;
 uint32_t g_last_valid_pc_command_ms = 0U;
 uint32_t g_pc_command_sequence = 0U;
+#endif
+
+#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+K_SEM_DEFINE(g_mpc_rx_kick, 0, 1);
+volatile uint16_t g_mpc_rx_len = 0U;
 #endif
 
 static const uint8_t g_device_descriptor[] = {
@@ -241,6 +256,10 @@ void UsbEventHandler(uint8_t busid, uint8_t event)
 		g_pc_command_clear_requested = true;
 		k_sem_give(&g_pc_link_tx_kick);
 	#endif
+	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+		g_mpc_rx_len = 0U;
+		k_sem_give(&g_mpc_rx_kick);
+	#endif
 		(void)ArmVendorOut();
 		break;
 	case USBD_EVENT_RESET:
@@ -250,6 +269,9 @@ void UsbEventHandler(uint8_t busid, uint8_t event)
 	#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 		g_pc_command_clear_requested = true;
 	#endif
+	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+		g_mpc_rx_len = 0U;
+	#endif
 		break;
 	case USBD_EVENT_DISCONNECTED:
 		g_configured = false;
@@ -258,12 +280,16 @@ void UsbEventHandler(uint8_t busid, uint8_t event)
 	#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 		g_pc_command_clear_requested = true;
 	#endif
+	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+		g_mpc_rx_len = 0U;
+	#endif
 		break;
 	default:
 		break;
 	}
 }
 
+#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 void EnqueueUsbRx(const uint8_t *data, size_t len)
 {
 	const size_t copy_len = MIN(len, msg::kUsbRawChunkSize);
@@ -276,14 +302,21 @@ void EnqueueUsbRx(const uint8_t *data, size_t len)
 	memcpy(frame.data, data, copy_len);
 	(void)msg::usb_raw_frames.TryPush(frame);
 }
+#endif
 
 void UsbInterruptOutCallback(uint8_t busid, uint8_t ep, uint32_t nbytes)
 {
 	ARG_UNUSED(busid);
 
 	g_vendor_out_armed = false;
+	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+	g_mpc_rx_len = static_cast<uint16_t>(MIN(static_cast<size_t>(nbytes),
+						    sizeof(g_vendor_read_buffer)));
+	k_sem_give(&g_mpc_rx_kick);
+	#elif defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 	EnqueueUsbRx(g_vendor_read_buffer, MIN(static_cast<size_t>(nbytes),
 					       sizeof(g_vendor_read_buffer)));
+	#endif
 
 	/*
 	 * Do not reuse the HPM qTD from inside its completion callback.  The HPM
@@ -487,6 +520,235 @@ int StartPcLinkWorker()
 }
 #endif /* CONFIG_WBR_CONTROL_PC_LINK */
 
+#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+K_THREAD_STACK_DEFINE(g_usb_mpc_stack, 2048);
+k_thread g_usb_mpc_thread;
+bool g_usb_mpc_started = false;
+uint32_t g_mpc_state_sequence = 0U;
+uint32_t g_mpc_received_count = 0U;
+uint32_t g_mpc_invalid_count = 0U;
+uint32_t g_mpc_tx_busy_count = 0U;
+uint32_t g_mpc_out_rearm_failure_count = 0U;
+uint32_t g_mpc_last_command_sequence = 0U;
+uint64_t g_mpc_last_command_receive_us = 0U;
+float g_mpc_last_left_force_n = 0.0F;
+float g_mpc_last_right_force_n = 0.0F;
+bool g_mpc_have_force_command = false;
+
+constexpr float kMpcMinimumForceN = 20.0F;
+constexpr float kMpcMaximumForceN = 150.0F;
+constexpr float kMpcMaximumForceStepN = 30.0F;
+constexpr uint32_t kMpcMaximumValidForUs = 30000U;
+constexpr uint32_t kMpcMaximumStateLag = 2U;
+constexpr uint64_t kMpcSessionResetGapUs = 100000U;
+
+bool IsNewerMpcSequence(uint32_t value, uint32_t previous)
+{
+	return value != previous && static_cast<int32_t>(value - previous) > 0;
+}
+
+float ClampMpcForce(float value)
+{
+	return CLAMP(value, kMpcMinimumForceN, kMpcMaximumForceN);
+}
+
+float LimitMpcForceStep(float value, float previous)
+{
+	return CLAMP(value, previous - kMpcMaximumForceStepN,
+		     previous + kMpcMaximumForceStepN);
+}
+
+protocols::MpcLinkState MakeMpcLinkState()
+{
+	const protocols::ethercat::ChassisSample sample =
+		modules::EthercatChassisPort::Instance().ReadChassisSample();
+	protocols::MpcLinkState state{};
+	state.sequence = ++g_mpc_state_sequence;
+	state.sender_uptime_ms = k_uptime_get_32();
+	state.roll_rad = sample.roll_rad;
+	state.roll_rate_rad_s = sample.roll_rate_rad_s;
+	state.body_height_m = sample.body_height_m;
+	state.body_height_rate_m_s = sample.body_height_rate_m_s;
+	state.left_leg_length_m = sample.left_leg_length_m;
+	state.left_leg_rate_m_s = sample.left_leg_rate_m_s;
+	state.right_leg_length_m = sample.right_leg_length_m;
+	state.right_leg_rate_m_s = sample.right_leg_rate_m_s;
+	state.left_support_force_n = sample.left_support_force_n;
+	state.right_support_force_n = sample.right_support_force_n;
+	if ((sample.status_flags & protocols::ethercat::kStateImuFresh) != 0U) {
+		state.valid_flags |= protocols::kMpcStateImuFresh;
+	}
+	if ((sample.status_flags & protocols::ethercat::kStateSupportForceValid) != 0U) {
+		state.valid_flags |= protocols::kMpcStateSupportForceValid;
+	}
+	if ((sample.status_flags & protocols::ethercat::kStateMotorFeedbackValid) != 0U) {
+		state.valid_flags |= protocols::kMpcStateMotorFeedbackValid;
+	}
+	if ((sample.status_flags & protocols::ethercat::kStateControlEnabled) != 0U) {
+		state.valid_flags |= protocols::kMpcStateControlEnabled;
+	}
+	if ((sample.status_flags & protocols::ethercat::kStateMpcOperatorEnabled) != 0U) {
+		state.valid_flags |= protocols::kMpcStateOperatorEnabled;
+	}
+	if ((sample.status_flags & protocols::ethercat::kStateMpcActiveApplied) != 0U) {
+		state.valid_flags |= protocols::kMpcStateActiveApplied;
+	}
+	state.motor_stale_mask = sample.motor_stale_mask;
+	return state;
+}
+
+void EnterUsbMpcFallback()
+{
+	modules::EthercatChassisPort::Instance().EnterLocalFallback();
+	g_mpc_have_force_command = false;
+}
+
+void HandleUsbMpcCommand(const protocols::MpcLinkCommand &input)
+{
+	const uint64_t now_us = k_cyc_to_us_floor64(k_cycle_get_64());
+	if (g_mpc_last_command_receive_us == 0U ||
+	    now_us - g_mpc_last_command_receive_us > kMpcSessionResetGapUs) {
+		g_mpc_last_command_sequence = 0U;
+		g_mpc_have_force_command = false;
+	}
+	if (!IsNewerMpcSequence(input.sequence, g_mpc_last_command_sequence)) {
+		return;
+	}
+	g_mpc_last_command_sequence = input.sequence;
+	g_mpc_last_command_receive_us = now_us;
+	if (input.mode == protocols::MpcLinkCommandMode::kDisabled) {
+		EnterUsbMpcFallback();
+		return;
+	}
+	const bool mode_valid = input.mode == protocols::MpcLinkCommandMode::kShadow ||
+		input.mode == protocols::MpcLinkCommandMode::kActive;
+	const uint8_t required_flags =
+		protocols::kMpcSolverConverged | protocols::kMpcSolverInputFinite;
+	const bool flags_valid = (input.solver_flags & required_flags) == required_flags;
+	const bool values_finite = isfinite(input.left_support_force_n) &&
+		isfinite(input.right_support_force_n);
+	const uint32_t state_lag = g_mpc_state_sequence - input.source_state_sequence;
+	const bool state_valid = input.source_state_sequence != 0U &&
+		state_lag <= kMpcMaximumStateLag;
+	const uint32_t validity_us = MIN(
+		static_cast<uint32_t>(input.valid_for_ms) * 1000U,
+		kMpcMaximumValidForUs);
+	if (!mode_valid || !flags_valid || !values_finite || !state_valid ||
+	    validity_us == 0U) {
+		EnterUsbMpcFallback();
+		return;
+	}
+
+	float left = ClampMpcForce(input.left_support_force_n);
+	float right = ClampMpcForce(input.right_support_force_n);
+	const protocols::ethercat::ChassisSample sample =
+		modules::EthercatChassisPort::Instance().ReadChassisSample();
+	const float previous_left = g_mpc_have_force_command
+		? g_mpc_last_left_force_n : ClampMpcForce(sample.left_support_force_n);
+	const float previous_right = g_mpc_have_force_command
+		? g_mpc_last_right_force_n : ClampMpcForce(sample.right_support_force_n);
+	left = LimitMpcForceStep(left, previous_left);
+	right = LimitMpcForceStep(right, previous_right);
+	protocols::ethercat::ChassisMpcCommand command{};
+	command.sequence = input.sequence;
+	command.source_state_sequence = input.source_state_sequence;
+	command.mode = input.mode == protocols::MpcLinkCommandMode::kActive
+		? protocols::ethercat::kMpcActive
+		: protocols::ethercat::kMpcShadow;
+	command.solver_flags = input.solver_flags;
+	command.left_support_force_n = left;
+	command.right_support_force_n = right;
+	command.valid_for_us = validity_us;
+	command.solve_time_us = input.solve_time_us;
+	command.received_at_us = now_us;
+	if (input.mode == protocols::MpcLinkCommandMode::kActive) {
+		modules::EthercatChassisPort::Instance().SetOperatorEnabled(true);
+	}
+	modules::EthercatChassisPort::Instance().HandleMpcCommand(command);
+	g_mpc_last_left_force_n = left;
+	g_mpc_last_right_force_n = right;
+	g_mpc_have_force_command = true;
+}
+
+void ProcessMpcFrame(const uint8_t *data, size_t len)
+{
+	protocols::MpcLinkCommand command{};
+	if (protocols::DecodeMpcLinkCommand(data, len, &command) != 0) {
+		++g_mpc_invalid_count;
+		return;
+	}
+	++g_mpc_received_count;
+	HandleUsbMpcCommand(command);
+
+	uint8_t packet[protocols::kMpcLinkStateFrameSize];
+	size_t packet_len = 0U;
+	const protocols::MpcLinkState state = MakeMpcLinkState();
+	if (protocols::EncodeMpcLinkState(&state, packet, sizeof(packet), &packet_len) != 0) {
+		++g_mpc_invalid_count;
+		return;
+	}
+	const int rc = platform::SendUsb(packet, packet_len);
+	if (rc == -EBUSY) {
+		++g_mpc_tx_busy_count;
+	}
+	if ((g_mpc_received_count % 10000U) == 0U) {
+		LOG_INF("usb_mpc rx=%u invalid=%u tx_busy=%u rearm_fail=%u",
+			g_mpc_received_count, g_mpc_invalid_count,
+			g_mpc_tx_busy_count, g_mpc_out_rearm_failure_count);
+	}
+}
+
+void RearmMpcOutWithRetry()
+{
+	while (g_configured && !g_vendor_out_armed) {
+		const int rc = ArmVendorOut();
+		if (rc == 0) {
+			return;
+		}
+		++g_mpc_out_rearm_failure_count;
+		/* A transient qTD/endpoint busy result must not leave the event-driven
+		 * worker permanently disarmed. Sleep so control/CAN work can run, then
+		 * retry without depending on another USB completion to wake us.
+		 */
+		k_sleep(K_MSEC(1));
+	}
+}
+
+void UsbMpcLoop(void *, void *, void *)
+{
+	for (;;) {
+		(void)k_sem_take(&g_mpc_rx_kick, K_FOREVER);
+		const uint16_t rx_len = g_mpc_rx_len;
+		if (rx_len != 0U) {
+			ProcessMpcFrame(g_vendor_read_buffer, rx_len);
+			g_mpc_rx_len = 0U;
+		}
+		RearmMpcOutWithRetry();
+	}
+}
+
+int StartUsbMpcWorker()
+{
+	if (g_usb_mpc_started) {
+		return 0;
+	}
+	const k_tid_t tid = k_thread_create(
+		&g_usb_mpc_thread, g_usb_mpc_stack,
+		K_THREAD_STACK_SIZEOF(g_usb_mpc_stack), UsbMpcLoop,
+		nullptr, nullptr, nullptr,
+		K_PRIO_PREEMPT(modules::scheduling::thread_priority::kUsbMpc),
+		0, K_NO_WAIT);
+	if (tid == nullptr) {
+		return -EINVAL;
+	}
+	k_thread_name_set(tid, "usb_mpc");
+	g_usb_mpc_started = true;
+	LOG_INF("usb_mpc worker started priority=%d",
+		modules::scheduling::thread_priority::kUsbMpc);
+	return 0;
+}
+#endif /* CONFIG_WBR_CONTROL_USB_MPC */
+
 #endif
 
 }  // namespace
@@ -522,6 +784,15 @@ int InitializeUsbSession()
 		const int pc_rc = StartPcLinkWorker();
 		if (pc_rc != 0) {
 			return pc_rc;
+		}
+	}
+#endif
+
+#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+	{
+		const int mpc_rc = StartUsbMpcWorker();
+		if (mpc_rc != 0) {
+			return mpc_rc;
 		}
 	}
 #endif

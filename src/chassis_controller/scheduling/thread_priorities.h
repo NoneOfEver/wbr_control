@@ -22,6 +22,7 @@ constexpr int kImu = 4; ///< IMU 采集与姿态解算线程优先级。
 constexpr int kAhrs = 4; ///< 板载 IMU 异步采集与姿态解算线程。
 constexpr int kChassis = 5; ///< 底盘闭环控制线程优先级。
 constexpr int kCanTx = 6; ///< CAN 发送调度线程优先级。
+constexpr int kUsbMpc = 7; ///< USB MPC；低于 CAN TX，避免主机通信阻塞执行器发送。
 constexpr int kPcLink = 7; ///< 上位机链路接收与解析线程优先级。
 constexpr int kPcLinkTx = 7; ///< 上位机链路异步发送提交线程优先级。
 constexpr int kRemoteInput = 8; ///< 遥控器输入解析线程优先级。
@@ -33,6 +34,9 @@ constexpr int kSdLog = 13; ///< FAT32 SD logging thread; deliberately below cont
 static_assert(kImu < kChassis);
 static_assert(kAhrs < kChassis);
 static_assert(kChassis < kCanTx);
+static_assert(kChassis < kUsbMpc);
+static_assert(kCanTx < kUsbMpc);
+static_assert(kUsbMpc <= kPcLink);
 static_assert(kCanTx < kPcLinkTx);
 static_assert(kCanTx < kPcLink);
 static_assert(kPcLink < kRemoteInput);

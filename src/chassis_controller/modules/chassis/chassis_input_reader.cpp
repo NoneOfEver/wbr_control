@@ -7,7 +7,6 @@
 #include <zephyr/kernel.h>
 
 #include <msg/chassismotors_feedback_raw.hpp>
-#include <msg/transport/freshness.hpp>
 #include <msg/remote_input_state.hpp>
 
 #include "chassis_config.h"
@@ -86,19 +85,36 @@ void ChassisInputReader::Read(ChassisCycleInput &input, uint32_t now_ms, double 
 	input.imu_fresh = input.imu.valid && last_imu_sequence_ != 0U &&
 			  input.imu_age_us <= static_cast<uint64_t>(kImuTimeoutMs) * 1000ULL;
 
-	const auto frame_is_fresh = [feedback_now_us](const msg::ChassisMotorFeedbackRawFrame &frame,
-						      bool decoded) {
-		return decoded && msg::IsFresh(
-			frame, &msg::ChassisMotorFeedbackRawFrame::precise_timestamp_us,
-			feedback_now_us, kMotorTimeoutUs, false);
+	const auto frame_age_us = [feedback_now_us](
+		const msg::ChassisMotorFeedbackRawFrame &frame, bool decoded) {
+		if (!decoded || frame.precise_timestamp_us > feedback_now_us) {
+			return UINT32_MAX;
+		}
+		const uint64_t age_us = feedback_now_us - frame.precise_timestamp_us;
+		return age_us > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(age_us);
 	};
-	const bool motors_fresh =
-		frame_is_fresh(input.wheel_frame.left, wheel_decoded.left) &&
-		frame_is_fresh(input.wheel_frame.right, wheel_decoded.right) &&
-		frame_is_fresh(input.joint_frame.left.b, joint_decoded.left.b) &&
-		frame_is_fresh(input.joint_frame.left.d, joint_decoded.left.d) &&
-		frame_is_fresh(input.joint_frame.right.b, joint_decoded.right.b) &&
-		frame_is_fresh(input.joint_frame.right.d, joint_decoded.right.d);
+	input.motor_feedback_age_us[0] = frame_age_us(input.wheel_frame.left, wheel_decoded.left);
+	input.motor_feedback_age_us[1] = frame_age_us(input.wheel_frame.right, wheel_decoded.right);
+	input.motor_feedback_age_us[2] = frame_age_us(input.joint_frame.left.b, joint_decoded.left.b);
+	input.motor_feedback_age_us[3] = frame_age_us(input.joint_frame.left.d, joint_decoded.left.d);
+	input.motor_feedback_age_us[4] = frame_age_us(input.joint_frame.right.b, joint_decoded.right.b);
+	input.motor_feedback_age_us[5] = frame_age_us(input.joint_frame.right.d, joint_decoded.right.d);
+	const bool motor_fresh[] = {
+		input.motor_feedback_age_us[0] <= kMotorTimeoutUs,
+		input.motor_feedback_age_us[1] <= kMotorTimeoutUs,
+		input.motor_feedback_age_us[2] <= kMotorTimeoutUs,
+		input.motor_feedback_age_us[3] <= kMotorTimeoutUs,
+		input.motor_feedback_age_us[4] <= kMotorTimeoutUs,
+		input.motor_feedback_age_us[5] <= kMotorTimeoutUs,
+	};
+	input.motor_stale_mask = 0U;
+	bool motors_fresh = true;
+	for (uint8_t i = 0U; i < ARRAY_SIZE(motor_fresh); ++i) {
+		if (!motor_fresh[i]) {
+			input.motor_stale_mask |= static_cast<uint8_t>(BIT(i));
+			motors_fresh = false;
+		}
+	}
 
 	// 正运动学输出统一采用校准后的左右腿坐标。
 	input.leg = {};

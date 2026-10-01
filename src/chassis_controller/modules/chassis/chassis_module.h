@@ -90,6 +90,8 @@ private:
 	uint32_t loop_period_us_ = 0U;
 	uint32_t min_loop_period_us_ = UINT32_MAX;
 	uint32_t max_loop_period_us_ = 0U;
+	uint8_t previous_motor_stale_mask_ = 0U;
+	uint32_t last_stale_trigger_age_us_[6] = {};
 	RecoveryController recovery_controller_;
 	ClimbStairsController climb_stairs_controller_;
 	BalanceController balance_controller_;

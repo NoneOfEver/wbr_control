@@ -204,4 +204,24 @@ config WBR_CONTROL_PC_LINK_COMMAND_TIMEOUT_MS
 	  Publish an idle command when no valid PC control frame has been received
 	  within this interval. USB reset and disconnect also request an idle command.
 
+config WBR_CONTROL_USB_MPC
+	bool "Enable MPC control protocol over USB"
+	default n
+	depends on WBR_CONTROL_RUNTIME_INIT_USB && WBR_CONTROL_MODULE_CHASSIS
+	depends on !WBR_CONTROL_PC_LINK
+	help
+	  Enable the WBR MPC link on the existing Vendor Interrupt endpoints. Shadow
+	  and Active commands share the same validated protocol and safety gates.
+	  This option is mutually exclusive with pc_link because both protocols
+	  consume the same USB OUT endpoint.
+
+config WBR_CONTROL_USB_MPC_HS_INTERVAL
+	int "USB MPC high-speed interrupt interval exponent"
+	range 1 4
+	default 1
+	depends on WBR_CONTROL_USB_MPC
+	help
+	  High-speed interrupt endpoint bInterval. A value of 1 requests one
+	  transaction opportunity per 125 us microframe; 4 requests 1 ms.
+
 endmenu
