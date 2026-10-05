@@ -275,25 +275,46 @@ void BalanceController::Update(const ChassisCycleInput &input,
 		const LegHardwareMap &hardware = kLegHardware.Get(side);
 		const LegKinematics &leg = input.leg.Get(side);
 		SideState &state = side_state_.Get(side);
+		const bool external_force_active = external_support != nullptr;
 		const double length_error = target_leg_length_ - leg.length;
-		state.leg_length_integral_force = UpdateLegLengthIntegral(
-			state.leg_length_integral_force, length_error, input.dt);
+		if (external_force_active) {
+			// The external MPC owns height and support force. Disable the local
+			// length-loop integral here; its P and D inputs are suppressed below so
+			// they cannot oppose MPC differential-force transients.
+			state.leg_length_integral_force = 0.0;
+		} else {
+			state.leg_length_integral_force = UpdateLegLengthIntegral(
+				state.leg_length_integral_force, length_error, input.dt);
+		}
 		const double nominal_support_force =
 			0.5 * kRobotMass * kGravity / std::max(cos_theta.Get(side), 0.5);
 		const double roll_force = side == Side::kLeft
 					  ? output.roll_compensation_force
 					  : -output.roll_compensation_force;
-		const double support_force = external_support != nullptr
-			? (side == Side::kLeft ? external_support->left_force_n
-					       : external_support->right_force_n)
+		double external_vertical_force = 0.0;
+		if (external_force_active) {
+			external_vertical_force = side == Side::kLeft
+				? external_support->left_force_n
+				: external_support->right_force_n;
+		}
+		// MPC and the force estimator both use vertical ground-reaction force.
+		// Convert it to the axial leg force expected by the VMC mapping.
+		const double support_force = external_force_active
+			? external_vertical_force / std::max(cos_theta.Get(side), 0.5)
 			: nominal_support_force + roll_force;
 		// 安装映射负责把“机体对腿”力矩转换成各侧 VMC 输入方向。
 		const double vmc_angle_torque =
 			hardware.vmc_torque_sign * output.body_on_leg_torque.Get(side);
-		const LegVmcOutput vmc = ComputeLegVmc(leg, target_leg_length_, support_force,
-						       state.leg_length_integral_force,
-						       vmc_angle_torque, leg.length_rate,
-						       target_leg_length_rate);
+		const double vmc_target_length = external_force_active
+			? leg.length : target_leg_length_;
+		const double vmc_target_length_rate = external_force_active
+			? 0.0 : target_leg_length_rate;
+		const double vmc_leg_speed = external_force_active
+			? 0.0 : leg.length_rate;
+		const LegVmcOutput vmc = ComputeLegVmc(
+			leg, vmc_target_length, support_force,
+			state.leg_length_integral_force, vmc_angle_torque,
+			vmc_leg_speed, vmc_target_length_rate);
 		output.leg_axial_force.Get(side) = vmc.axial_force;
 		JointPair<double> &joint_torque = output.joint_torque.Get(side);
 		joint_torque.b =

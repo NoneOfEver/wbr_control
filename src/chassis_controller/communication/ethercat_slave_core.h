@@ -13,6 +13,7 @@ struct ChassisSample {
 	float roll_rate_rad_s = 0.0F;
 	float body_height_m = 0.0F;
 	float body_height_rate_m_s = 0.0F;
+	float target_body_height_m = 0.0F;
 	float left_leg_length_m = 0.0F;
 	float left_leg_rate_m_s = 0.0F;
 	float right_leg_length_m = 0.0F;

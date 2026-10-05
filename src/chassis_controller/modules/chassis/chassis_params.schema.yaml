@@ -412,6 +412,23 @@ parameters:
     cpp_name: kSupportMaximumAbsForce
     cpp_type: double
     min: 1.0
+  support_force_estimator.feedback_gain:
+    cpp_name: kSupportForceFeedbackGain
+    cpp_type: double
+    min: 0.0
+    max: 1.0
+  support_force_estimator.feedback_correction_limit_n:
+    cpp_name: kSupportForceFeedbackCorrectionLimit
+    cpp_type: double
+    min: 0.0
+  support_force_estimator.feedback_minimum_force_n:
+    cpp_name: kSupportForceFeedbackMinimumForce
+    cpp_type: double
+    min: 0.0
+  support_force_estimator.feedback_maximum_force_n:
+    cpp_name: kSupportForceFeedbackMaximumForce
+    cpp_type: double
+    min: 0.0
   flight.liftoff_force_ratio:
     cpp_name: kFlightLiftoffForceRatio
     cpp_type: double
@@ -738,6 +755,9 @@ parameters:
     - -1
     - 1
 constraints:
+- kind: less_than
+  left: support_force_estimator.feedback_minimum_force_n
+  right: support_force_estimator.feedback_maximum_force_n
 - kind: less_than
   left: balance.min_leg_length_m
   right: balance.max_leg_length_m

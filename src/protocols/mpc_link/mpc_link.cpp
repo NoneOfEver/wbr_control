@@ -120,14 +120,15 @@ int EncodeMpcLinkState(const MpcLinkState *state, uint8_t *out,
 	const float values[] = {
 		state->roll_rad, state->roll_rate_rad_s,
 		state->body_height_m, state->body_height_rate_m_s,
+		state->target_body_height_m,
 		state->left_leg_length_m, state->left_leg_rate_m_s,
 		state->right_leg_length_m, state->right_leg_rate_m_s,
 		state->left_support_force_n, state->right_support_force_n,
 	};
-	for (size_t i = 0U; i < 10U; ++i) {
+	for (size_t i = 0U; i < 11U; ++i) {
 		WriteLeFloat(&out[kMpcLinkHeaderSize + i * 4U], values[i]);
 	}
-	const size_t flags_offset = kMpcLinkHeaderSize + 40U;
+	const size_t flags_offset = kMpcLinkHeaderSize + 44U;
 	out[flags_offset] = state->control_state;
 	out[flags_offset + 1U] = state->valid_flags;
 	out[flags_offset + 2U] = state->contact_flags;
@@ -153,14 +154,15 @@ int DecodeMpcLinkState(const uint8_t *frame, size_t frame_len, MpcLinkState *out
 	float *values[] = {
 		&out->roll_rad, &out->roll_rate_rad_s,
 		&out->body_height_m, &out->body_height_rate_m_s,
+		&out->target_body_height_m,
 		&out->left_leg_length_m, &out->left_leg_rate_m_s,
 		&out->right_leg_length_m, &out->right_leg_rate_m_s,
 		&out->left_support_force_n, &out->right_support_force_n,
 	};
-	for (size_t i = 0U; i < 10U; ++i) {
+	for (size_t i = 0U; i < 11U; ++i) {
 		*values[i] = ReadLeFloat(&frame[kMpcLinkHeaderSize + i * 4U]);
 	}
-	const size_t flags_offset = kMpcLinkHeaderSize + 40U;
+	const size_t flags_offset = kMpcLinkHeaderSize + 44U;
 	out->control_state = frame[flags_offset];
 	out->valid_flags = frame[flags_offset + 1U];
 	out->contact_flags = frame[flags_offset + 2U];

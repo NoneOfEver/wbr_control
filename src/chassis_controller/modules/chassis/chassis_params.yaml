@@ -103,6 +103,10 @@ support_force_estimator:
   force_filter_cutoff_hz: 25.0
   jacobian_damping: 0.000001
   maximum_abs_force_n: 300.0
+  feedback_gain: 0.1
+  feedback_correction_limit_n: 5.0
+  feedback_minimum_force_n: 20.0
+  feedback_maximum_force_n: 150.0
 
 flight:
   liftoff_force_ratio: 0.2

@@ -79,6 +79,7 @@ ZTEST(protocols, test_mpc_link_state_round_trip_and_crc_rejection)
 	input.roll_rate_rad_s = 0.75F;
 	input.body_height_m = 0.24F;
 	input.body_height_rate_m_s = -0.31F;
+	input.target_body_height_m = 0.27F;
 	input.left_leg_length_m = 0.23F;
 	input.left_leg_rate_m_s = 0.12F;
 	input.right_leg_length_m = 0.25F;
@@ -99,6 +100,7 @@ ZTEST(protocols, test_mpc_link_state_round_trip_and_crc_rejection)
 	zassert_ok(protocols::DecodeMpcLinkState(frame, frame_len, &decoded));
 	zassert_equal(decoded.sequence, input.sequence);
 	zassert_within(decoded.roll_rad, input.roll_rad, 1.0e-6F);
+	zassert_within(decoded.target_body_height_m, input.target_body_height_m, 1.0e-6F);
 	zassert_within(decoded.right_support_force_n, input.right_support_force_n, 1.0e-6F);
 	zassert_equal(decoded.valid_flags, input.valid_flags);
 	frame[30] ^= 0x80U;

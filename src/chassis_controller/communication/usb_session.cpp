@@ -569,6 +569,7 @@ protocols::MpcLinkState MakeMpcLinkState()
 	state.roll_rate_rad_s = sample.roll_rate_rad_s;
 	state.body_height_m = sample.body_height_m;
 	state.body_height_rate_m_s = sample.body_height_rate_m_s;
+	state.target_body_height_m = sample.target_body_height_m;
 	state.left_leg_length_m = sample.left_leg_length_m;
 	state.left_leg_rate_m_s = sample.left_leg_rate_m_s;
 	state.right_leg_length_m = sample.right_leg_length_m;

@@ -57,9 +57,12 @@ private:
 	/**
 	 * @brief 根据冻结输入计算本周期的全部执行器目标。
 	 * @param[in] input 本周期使用的只读输入快照。
+	 * @param[in] support_force 本周期的左右轮竖直地面支撑力估计。
 	 * @param[out] output 接收本周期计算结果的输出对象。
 	 */
-	void ComputeControlOutput(const ChassisCycleInput &input, ChassisControlOutput &output);
+	void ComputeControlOutput(const ChassisCycleInput &input,
+				  const ChassisSupportForceEstimate &support_force,
+				  ChassisControlOutput &output);
 	/**
 	 * @brief 对控制输出执行限幅并写入执行器发送通道。
 	 * @param[out] output 接收本周期计算结果的输出对象。

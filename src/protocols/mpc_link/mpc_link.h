@@ -9,12 +9,12 @@ namespace protocols {
 
 constexpr uint8_t kMpcLinkMagic0 = 'W';
 constexpr uint8_t kMpcLinkMagic1 = 'M';
-constexpr uint8_t kMpcLinkVersion = 1U;
+constexpr uint8_t kMpcLinkVersion = 2U;
 constexpr uint8_t kMpcLinkStateMessageType = 0x10U;
 constexpr uint8_t kMpcLinkCommandMessageType = 0x20U;
 constexpr size_t kMpcLinkHeaderSize = 14U;
 constexpr size_t kMpcLinkCrcSize = 2U;
-constexpr size_t kMpcLinkStatePayloadSize = 44U;
+constexpr size_t kMpcLinkStatePayloadSize = 48U;
 constexpr size_t kMpcLinkCommandPayloadSize = 24U;
 constexpr size_t kMpcLinkStateFrameSize =
 	kMpcLinkHeaderSize + kMpcLinkStatePayloadSize + kMpcLinkCrcSize;
@@ -22,7 +22,7 @@ constexpr size_t kMpcLinkCommandFrameSize =
 	kMpcLinkHeaderSize + kMpcLinkCommandPayloadSize + kMpcLinkCrcSize;
 constexpr size_t kMpcLinkMaximumFrameSize = 64U;
 
-static_assert(kMpcLinkStateFrameSize == 60U);
+static_assert(kMpcLinkStateFrameSize == 64U);
 static_assert(kMpcLinkCommandFrameSize == 40U);
 static_assert(kMpcLinkStateFrameSize <= kMpcLinkMaximumFrameSize);
 static_assert(kMpcLinkCommandFrameSize <= kMpcLinkMaximumFrameSize);
@@ -68,6 +68,7 @@ struct MpcLinkState {
 	float roll_rate_rad_s = 0.0F;
 	float body_height_m = 0.0F;
 	float body_height_rate_m_s = 0.0F;
+	float target_body_height_m = 0.0F;
 	float left_leg_length_m = 0.0F;
 	float left_leg_rate_m_s = 0.0F;
 	float right_leg_length_m = 0.0F;

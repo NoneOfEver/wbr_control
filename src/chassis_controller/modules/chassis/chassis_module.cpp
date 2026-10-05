@@ -12,16 +12,27 @@
 #include "chassis_module.h"
 
 #include <algorithm>
+#include <cmath>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
 #include <msg/chassis_realtime_status.hpp>
 #include <msg/oscilloscope_sample.hpp>
+#if defined(CONFIG_WBR_CONTROL_AHRS_HEATER_TELEMETRY)
+#include <msg/imu_heater_status.hpp>
+#endif
 #include <periodic_schedule.h>
 #include <chassis_controller/scheduling/thread_phases.h>
 #include <chassis_controller/scheduling/thread_priorities.h>
 #include "chassis_config.h"
 #include "chassis_imu_adapter.h"
+
+#if defined(CONFIG_WBR_CONTROL_CHASSIS_BOOT_TRACE)
+#include <SEGGER_RTT.h>
+#define CHASSIS_BOOT_TRACE(message) do { if (loop_ticks_ == 0U) { SEGGER_RTT_WriteString(0, message "\n"); } } while (false)
+#else
+#define CHASSIS_BOOT_TRACE(message) do { } while (false)
+#endif
 
 LOG_MODULE_REGISTER(chassis_module, LOG_LEVEL_INF);
 
@@ -193,8 +204,10 @@ void ChassisModule::UpdateControlState(const ChassisCycleInput &input)
 	}
 }
 
-void ChassisModule::ComputeControlOutput(const ChassisCycleInput &input,
-					 ChassisControlOutput &output)
+void ChassisModule::ComputeControlOutput(
+	const ChassisCycleInput &input,
+	const ChassisSupportForceEstimate &support_force,
+	ChassisControlOutput &output)
 {
 	output = {};
 	if (state_machine_.state() == ChassisControlState::kRecovery) {
@@ -292,8 +305,35 @@ void ChassisModule::ComputeControlOutput(const ChassisCycleInput &input,
 			ethercat_command, k_cyc_to_us_floor64(k_cycle_get_64()));
 	if (use_external) {
 		external_support.sequence = ethercat_command.sequence;
+		output.external_support_force_target.left = ethercat_command.left_support_force_n;
+		output.external_support_force_target.right = ethercat_command.right_support_force_n;
 		external_support.left_force_n = ethercat_command.left_support_force_n;
 		external_support.right_force_n = ethercat_command.right_support_force_n;
+		if (support_force.valid &&
+		    std::isfinite(support_force.filtered_force_n.left) &&
+		    std::isfinite(support_force.filtered_force_n.right)) {
+			const auto feedback_correction = [](double target, double estimated) {
+				return std::clamp(
+					kSupportForceFeedbackGain * (target - estimated),
+					-kSupportForceFeedbackCorrectionLimit,
+					kSupportForceFeedbackCorrectionLimit);
+			};
+			output.support_force_feedback_correction.left = feedback_correction(
+				external_support.left_force_n, support_force.filtered_force_n.left);
+			output.support_force_feedback_correction.right = feedback_correction(
+				external_support.right_force_n, support_force.filtered_force_n.right);
+			external_support.left_force_n = std::clamp(
+				external_support.left_force_n +
+					output.support_force_feedback_correction.left,
+				kSupportForceFeedbackMinimumForce,
+				kSupportForceFeedbackMaximumForce);
+			external_support.right_force_n = std::clamp(
+				external_support.right_force_n +
+					output.support_force_feedback_correction.right,
+				kSupportForceFeedbackMinimumForce,
+				kSupportForceFeedbackMaximumForce);
+			output.support_force_feedback_applied = true;
+		}
 	}
 	balance_controller_.Update(input, output,
 		use_external ? &external_support : nullptr);
@@ -394,10 +434,33 @@ void ChassisModule::PublishTelemetry(const ChassisCycleInput &input,
 			static_cast<float>(input.motor_feedback_age_us[slot]);
 	}
 	sample.value[26] = static_cast<float>(input.motor_stale_mask);
-	for (uint8_t slot = 0U; slot < 6U; ++slot) {
-		sample.value[27U + slot] =
-			static_cast<float>(last_stale_trigger_age_us_[slot]);
+#if defined(CONFIG_WBR_CONTROL_AHRS_HEATER_TELEMETRY)
+	/* Heater bring-up uses the existing chassis VOFA frame and keeps channels
+	 * 0-26 unchanged. */
+	msg::ImuHeaterStatus heater = {};
+	if (msg::latest_imu_heater_status.read(heater) &&
+	    heater.sample_sequence != 0U) {
+		sample.value[27] = heater.temperature_c;
+		sample.value[28] = heater.target_c;
+		sample.value[29] = heater.duty_percent;
+		sample.value[30] = static_cast<float>(sample.uptime_ms - heater.last_sample_ms);
+		sample.value[31] = static_cast<float>(heater.sample_sequence);
+		sample.value[32] = heater.control_ready ? 1.0F : 0.0F;
+	} else {
+		sample.value[30] = -1.0F;
 	}
+#else
+	/* Temporary IMU direction-calibration channels. Rates are converted to
+	 * deg/s so each rate can be compared directly with the slope of its angle
+	 * trace in VOFA. */
+	sample.value[27] = static_cast<float>(input.roll / kDegToRad);
+	sample.value[28] = static_cast<float>(input.roll_rate / kDegToRad);
+	sample.value[29] = static_cast<float>(input.pitch / kDegToRad);
+	sample.value[30] = static_cast<float>(input.pitch_rate / kDegToRad);
+	sample.value[31] = input.imu.yaw_deg;
+	sample.value[32] = static_cast<float>(
+		static_cast<double>(input.imu.yaw_rate_rad_s) / kDegToRad);
+#endif
 	msg::latest_oscilloscope_sample.write(sample);
 }
 
@@ -412,6 +475,8 @@ void ChassisModule::PublishEthercatSample(
 		0.5 * (input.leg.left.length + input.leg.right.length));
 	sample.body_height_rate_m_s = static_cast<float>(
 		0.5 * (input.leg.left.length_rate + input.leg.right.length_rate));
+	sample.target_body_height_m =
+		static_cast<float>(balance_controller_.target_leg_length());
 	sample.left_leg_length_m = static_cast<float>(input.leg.left.length);
 	sample.left_leg_rate_m_s = static_cast<float>(input.leg.left.length_rate);
 	sample.right_leg_length_m = static_cast<float>(input.leg.right.length);
@@ -467,6 +532,7 @@ void ChassisModule::PublishRealtimeStatus(const ChassisCycleInput &input,
 
 void ChassisModule::RunLoop()
 {
+	CHASSIS_BOOT_TRACE("chassis: entered thread");
 	LOG_INF("chassis started: imu_source=%u timeout=%u ms",
 		static_cast<unsigned int>(SelectedChassisImuSource()),
 		static_cast<unsigned int>(kImuTimeoutMs));
@@ -477,6 +543,7 @@ void ChassisModule::RunLoop()
 
 	for (;;) {
 		(void)release.WaitForNextRelease();
+		CHASSIS_BOOT_TRACE("chassis: first release");
 		deadline_miss_count_ = release.total_missed_releases();
 		const uint32_t loop_start_cycle = k_cycle_get_32();
 
@@ -498,6 +565,7 @@ void ChassisModule::RunLoop()
 		// 单周期流水线：输入快照 -> FSM -> 控制计算 -> 执行器 -> 遥测。
 		ChassisControlOutput output = {};
 		input_reader_.Read(input, now_ms, dt, actuator_.arm_complete());
+		CHASSIS_BOOT_TRACE("chassis: input read");
 		const uint8_t newly_stale = static_cast<uint8_t>(
 			input.motor_stale_mask & ~previous_motor_stale_mask_);
 		for (uint8_t slot = 0U; slot < 6U; ++slot) {
@@ -509,19 +577,27 @@ void ChassisModule::RunLoop()
 		previous_motor_stale_mask_ = input.motor_stale_mask;
 		const ChassisSupportForceEstimate support_force =
 			support_force_estimator_.Update(input);
+		CHASSIS_BOOT_TRACE("chassis: support force");
 		const bool flight_detected = flight_controller_.UpdateLiftoffDetection(
 			input, support_force,
 			state_machine_.state() == ChassisControlState::kBalance);
 		state_machine_.SetFlightDetected(flight_detected);
+		CHASSIS_BOOT_TRACE("chassis: flight detection");
 		UpdateControlState(input);
+		CHASSIS_BOOT_TRACE("chassis: state updated");
 		const bool ethercat_eligible =
 			state_machine_.state() == ChassisControlState::kBalance &&
 			input.requested_enable && input.feedback_valid && input.imu_fresh;
 		EthercatChassisPort::Instance().SetChassisEligible(ethercat_eligible);
-		ComputeControlOutput(input, output);
+		CHASSIS_BOOT_TRACE("chassis: EtherCAT eligibility");
+		ComputeControlOutput(input, support_force, output);
+		CHASSIS_BOOT_TRACE("chassis: output computed");
 		ApplyControlOutput(output);
+		CHASSIS_BOOT_TRACE("chassis: output applied");
 		PublishEthercatSample(input, support_force);
+		CHASSIS_BOOT_TRACE("chassis: EtherCAT sample");
 		PublishTelemetry(input, output, support_force);
+		CHASSIS_BOOT_TRACE("chassis: telemetry published");
 		++loop_ticks_;
 		if ((loop_ticks_ % kRealtimeStatusPeriodTicks) == 0U) {
 			PublishRealtimeStatus(input, loop_start_cycle);

@@ -132,6 +132,9 @@ struct ChassisControlOutput {
 	double differential_leg_torque = 0.0;
 	double roll_reference = 0.0;
 	double roll_compensation_force = 0.0;
+	SidePair<double> external_support_force_target;
+	SidePair<double> support_force_feedback_correction;
+	bool support_force_feedback_applied = false;
 };
 
 struct ChassisSupportForceEstimate {
@@ -144,7 +147,7 @@ struct ChassisSupportForceEstimate {
 	bool valid = false;
 };
 
-/** Absolute support-force feed-forward supplied by an external controller. */
+/** Absolute vertical ground-reaction-force target supplied by an external controller. */
 struct ExternalSupportForceCommand {
 	uint32_t sequence = 0U;
 	double left_force_n = 0.0;
