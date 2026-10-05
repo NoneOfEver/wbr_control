@@ -12,19 +12,16 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <hpm_mcan_drv.h>
+#if defined(CONFIG_BOARD_DUST_HPM5E3Y)
+#include <hpm_gpio_drv.h>
+#include <hpm_soc.h>
+#endif
 
 #define TEST_CAN_ID 0x123U
 
-// #if DT_NODE_HAS_STATUS(DT_ALIAS(canbus), okay)
-// #define TEST_CAN_NODE DT_ALIAS(canbus)
-// #elif DT_NODE_HAS_STATUS(DT_NODELABEL(can1), okay)
-// #define TEST_CAN_NODE DT_NODELABEL(can1)
-// #if DT_NODE_HAS_STATUS(DT_NODELABEL(can0), okay)
-// #define TEST_CAN_NODE DT_NODELABEL(can0)
-// #elif DT_NODE_HAS_STATUS(DT_NODELABEL(can2), okay)
-// #define TEST_CAN_NODE DT_NODELABEL(can2)
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(can0), okay)
-#define TEST_CAN_NODE DT_NODELABEL(can0)
+#if DT_NODE_HAS_STATUS(DT_ALIAS(canbus), okay)
+#define TEST_CAN_NODE DT_ALIAS(canbus)
 #else
 #define TEST_CAN_NODE DT_INVALID_NODE
 #endif
@@ -70,6 +67,23 @@ static void PrintCanState(const struct device *can_dev, const char *tag)
 	} else {
 		printk("[STATE] %s: can_get_state rc=%d\n", tag, rc);
 	}
+}
+
+static void PrintCanRegisters(void)
+{
+	MCAN_Type *can = (MCAN_Type *)DT_REG_ADDR(TEST_CAN_NODE);
+
+	printk("[REG] CCCR=%08x PSR=%08x ECR=%08x IR=%08x TXBRP=%08x TXBTO=%08x\n",
+	       can->CCCR, can->PSR, can->ECR, can->IR, can->TXBRP, can->TXBTO);
+	printk("[BUS] activity=%u (0=sync 1=idle 2=rx 3=tx) RXD=%u (0=dominant 1=recessive) TEST=%08x\n",
+	       MCAN_PSR_ACT_GET(can->PSR), MCAN_TEST_RX_GET(can->TEST), can->TEST);
+#if defined(CONFIG_BOARD_DUST_HPM5E3Y)
+	printk("[PAD] PD0 func=%08x ctl=%08x level=%u; PD1 func=%08x ctl=%08x level=%u\n",
+	       HPM_IOC->PAD[96].FUNC_CTL, HPM_IOC->PAD[96].PAD_CTL,
+	       gpio_read_pin(HPM_GPIO0, GPIO_DI_GPIOD, 0),
+	       HPM_IOC->PAD[97].FUNC_CTL, HPM_IOC->PAD[97].PAD_CTL,
+	       gpio_read_pin(HPM_GPIO0, GPIO_DI_GPIOD, 1));
+#endif
 }
 
 static void OnTxDone(const struct device *dev, int error, void *user_data)
@@ -156,9 +170,15 @@ int main(void)
 	printk("using can device: %s\n", can_dev->name);
 	PrintCanConfig(can_dev);
 
+#ifdef CAN_TEST_LOOPBACK
+	int rc = can_set_mode(can_dev, CAN_MODE_LOOPBACK);
+	printk("[INFO] mode: internal loopback (no external CAN traffic)\n");
+#else
 	int rc = can_set_mode(can_dev, CAN_MODE_NORMAL);
+	printk("[INFO] mode: normal (physical CAN bus)\n");
+#endif
 	if (rc != 0) {
-		printk("[FAIL] can_set_mode(normal) rc=%d\n", rc);
+		printk("[FAIL] can_set_mode rc=%d\n", rc);
 		return rc;
 	}
 
@@ -173,12 +193,6 @@ int main(void)
 		return rc;
 	}
 
-	// int rc = can_set_mode(can_dev, CAN_MODE_LOOPBACK);
-	// if (rc != 0) {
-	// 	printk("[FAIL] can_set_mode(loopback) rc=%d\n", rc);
-	// 	return rc;
-	// }
-
 	rc = can_start(can_dev);
 	if ((rc != 0) && (rc != -EALREADY)) {
 		printk("[FAIL] can_start rc=%d\n", rc);
@@ -186,6 +200,7 @@ int main(void)
 	}
 
 	PrintCanState(can_dev, "after start");
+	PrintCanRegisters();
 
 	/* Add RX filter for our test ID so we can see loopback/echo replies. */
 	struct can_filter rx_filter = {
@@ -200,8 +215,12 @@ int main(void)
 		printk("[INFO] RX filter installed for id=0x%x (filter_id=%d)\n", TEST_CAN_ID, filter_id);
 	}
 
+#ifdef CAN_TEST_LOOPBACK
+	printk("[INFO] internal CAN TX/RX test started (id=0x%x)\n", TEST_CAN_ID);
+#else
 	printk("[INFO] physical CAN TX/RX test started (id=0x%x)\n", TEST_CAN_ID);
-	printk("[INFO] connect CAN transceiver and a peer/analyzer at same baud\n");
+	printk("[INFO] connect CAN transceiver and an ACK-capable peer at same baud\n");
+#endif
 
 	uint32_t seq = 0U;
 	bool tx_blocked = false;
@@ -249,6 +268,7 @@ int main(void)
 			} else {
 				printk("[WARN] tx completion timeout (likely no ACK / transceiver missing)\n");
 				PrintCanState(can_dev, "tx timeout");
+				PrintCanRegisters();
 				rc = can_stop(can_dev);
 				if ((rc != 0) && (rc != -EALREADY)) {
 					printk("[WARN] can_stop after tx timeout rc=%d\n", rc);

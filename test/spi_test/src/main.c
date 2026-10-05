@@ -15,7 +15,7 @@
 #include <zephyr/linker/section_tags.h>
 #include <zephyr/sys/printk.h>
 
-#define IMU_SPI_NODE DT_NODELABEL(spi2)
+#define IMU_SPI_NODE DT_CHOSEN(wbr_control_onboard_imu_spi)
 #define IMU_CS_NODE DT_ALIAS(onboard_imu_cs)
 #define IMU_DRDY_NODE DT_ALIAS(onboard_imu_drdy)
 
@@ -36,8 +36,11 @@
 #define IMU_TRANSFER_TIMEOUT_MS 20U
 #define IMU_BURST_SIZE 13U
 
+#if !DT_HAS_CHOSEN(wbr_control_onboard_imu_spi)
+#error "wbr-control,onboard-imu-spi must select the IMU SPI controller"
+#endif
 #if !DT_NODE_HAS_STATUS(IMU_SPI_NODE, okay)
-#error "SPI2 must be enabled"
+#error "IMU SPI controller must be enabled"
 #endif
 #if !DT_NODE_EXISTS(IMU_CS_NODE)
 #error "onboard-imu-cs must be defined by the board overlay"
@@ -46,7 +49,7 @@
 #error "onboard-imu-drdy must be defined by the board overlay"
 #endif
 #if DT_NODE_HAS_PROP(IMU_SPI_NODE, cs_gpios)
-#error "SPI2 cs-gpios must be removed because spi_config.cs owns PA26"
+#error "SPI controller cs-gpios must be removed because spi_config.cs owns IMU CS"
 #endif
 
 static const struct device *const spi_dev = DEVICE_DT_GET(IMU_SPI_NODE);
@@ -296,7 +299,7 @@ static int ImuInitialize(void)
 		}
 	}
 
-	/* Arm PB09 before routing sensor DRDY to INT1. */
+	/* Arm the board's DRDY GPIO before routing sensor DRDY to INT1. */
 	gpio_init_callback(&imu_drdy_callback, ImuDataReadyCallback, BIT(imu_drdy.pin));
 	rc = gpio_add_callback(imu_drdy.port, &imu_drdy_callback);
 	if (rc != 0) {
@@ -328,12 +331,13 @@ K_THREAD_DEFINE(scheduler_probe_tid, 1024, SchedulerProbeThread,
 int main(void)
 {
 	printk("ICM42688P-HXY INT1 + asynchronous SPI DMA test\n");
-	printk("SPI2=%u Hz CS=PA26 INT1=PB09 INT2=PB12(unused)\n",
-	       IMU_SPI_FREQUENCY_HZ);
+	printk("SPI=%s %u Hz CS=%s pin=%u DRDY=%s pin=%u\n",
+	       spi_dev->name, IMU_SPI_FREQUENCY_HZ,
+	       imu_cs.port->name, imu_cs.pin, imu_drdy.port->name, imu_drdy.pin);
 
 	if (!device_is_ready(spi_dev) || !gpio_is_ready_dt(&imu_cs) ||
 	    !gpio_is_ready_dt(&imu_drdy)) {
-		printk("SPI2/CS/DRDY device is not ready\n");
+		printk("SPI/CS/DRDY device is not ready\n");
 		return -ENODEV;
 	}
 	int rc = gpio_pin_configure_dt(&imu_cs, GPIO_OUTPUT_INACTIVE);

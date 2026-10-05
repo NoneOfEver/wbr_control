@@ -1,0 +1,4 @@
+/* The standalone SPI test does not use CherryUSB. */
+&cherryusb_usb0 {
+	status = "disabled";
+};

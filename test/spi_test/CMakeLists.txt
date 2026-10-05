@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 if(NOT DEFINED DTC_OVERLAY_FILE)
-  set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/dust-hpm6750.overlay")
+  if(BOARD MATCHES "^dust-hpm6750")
+    set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/dust-hpm6750.overlay")
+  elseif(BOARD MATCHES "^dust-hpm5e3y")
+    set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/dust-hpm5e3y.overlay")
+  endif()
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/../common/diagnostics.cmake)

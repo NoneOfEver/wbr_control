@@ -79,7 +79,7 @@ int main(void)
 		return rc;
 	}
 
-	printk("UART0 configured; starting VOFA async XDMA TX\r\n");
+	printk("UART0 configured; starting VOFA async DMA TX\r\n");
 
 	k_sem_init(&g_tx_done_sem, 0, 1);
 	rc = uart_callback_set(g_uart, uart_callback, NULL);
@@ -90,7 +90,7 @@ int main(void)
 
 	/* Exercise the production timeout-recovery primitive before entering the
 	 * continuous test.  The 112-byte frame remains in flight for about 1.2 ms
-	 * at 921600 baud, so an immediate abort must use the XDMA device and deliver
+	 * at 921600 baud, so an immediate abort must use the board DMA device and deliver
 	 * exactly one UART_TX_ABORTED event.
 	 */
 	prepare_frame(0U);
