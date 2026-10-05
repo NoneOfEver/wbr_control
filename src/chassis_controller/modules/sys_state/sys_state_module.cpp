@@ -11,12 +11,16 @@
 
 #include <zephyr/devicetree.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/zbus/zbus.h>
 
 #include "sys_state_module.h"
 
+#include <hpm_clock_drv.h>
+#include <hpm_gpio_drv.h>
 #include <periodic_schedule.h>
 #include <chassis_controller/scheduling/thread_phases.h>
 #include <chassis_controller/scheduling/thread_priorities.h>
+#include <msg/system_status_message.hpp>
 #include <sys_state_params_generated.h>
 
 LOG_MODULE_REGISTER(sys_state_module, LOG_LEVEL_INF);
@@ -32,6 +36,9 @@ const gpio_dt_spec kLedG = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
 #endif
 #if DT_NODE_EXISTS(DT_ALIAS(led2))
 const gpio_dt_spec kLedB = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios);
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(ws2812))
+const gpio_dt_spec kWs2812 = GPIO_DT_SPEC_GET(DT_ALIAS(ws2812), gpios);
 #endif
 
 #if DT_NODE_EXISTS(DT_ALIAS(pwm_buzzer))
@@ -57,6 +64,51 @@ constexpr uint8_t kBuzzerTickPercent =
 	modules::sys_state_params::kSystemStateBuzzerTickPercent;
 constexpr uint16_t kBuzzerTickSteps =
 	modules::sys_state_params::kSystemStateBuzzerTickSteps;
+
+#if DT_NODE_EXISTS(DT_ALIAS(ws2812))
+constexpr uint32_t kWs2812Port = GPIO_DO_GPIOD;
+uint32_t g_ws2812_period_cycles;
+uint32_t g_ws2812_zero_high_cycles;
+uint32_t g_ws2812_one_high_cycles;
+
+uint32_t ReadCoreCycles()
+{
+	uint32_t cycles;
+	__asm__ volatile("csrr %0, mcycle" : "=r"(cycles));
+	return cycles;
+}
+
+void WaitUntilCycle(uint32_t deadline)
+{
+	while (static_cast<int32_t>(ReadCoreCycles() - deadline) < 0) {
+		__asm__ volatile("nop");
+	}
+}
+
+void SendWs2812Byte(uint8_t value)
+{
+	for (uint8_t mask = 0x80U; mask != 0U; mask >>= 1U) {
+		gpio_write_pin(HPM_GPIO0, kWs2812Port, kWs2812.pin, 1U);
+		const uint32_t start = ReadCoreCycles();
+		WaitUntilCycle(start + ((value & mask) != 0U ? g_ws2812_one_high_cycles
+							       : g_ws2812_zero_high_cycles));
+		gpio_write_pin(HPM_GPIO0, kWs2812Port, kWs2812.pin, 0U);
+		WaitUntilCycle(start + g_ws2812_period_cycles);
+	}
+}
+
+void SendWs2812Color(uint8_t r, uint8_t g, uint8_t b)
+{
+	const unsigned int key = irq_lock();
+	/* WS2812B wire order is GRB. One pixel holds interrupts for about 30 us. */
+	SendWs2812Byte(g);
+	SendWs2812Byte(r);
+	SendWs2812Byte(b);
+	irq_unlock(key);
+	/* Keep DIN low beyond the latch interval before a future update. */
+	k_busy_wait(80U);
+}
+#endif
 
 uint8_t TriangleBrightnessPercent(uint16_t step)
 {
@@ -92,6 +144,30 @@ int SysStateModule::Start()
 	}
 
 	g_sys_state_diag_state = kSysStateDiagInitEnter;
+
+#if DT_NODE_EXISTS(DT_ALIAS(ws2812))
+	ws2812_ = kWs2812;
+	const uint32_t cpu_frequency_hz = clock_get_frequency(clock_cpu0);
+	g_ws2812_period_cycles = cpu_frequency_hz / 800000U;
+	g_ws2812_zero_high_cycles =
+		static_cast<uint32_t>((static_cast<uint64_t>(cpu_frequency_hz) * 350U) /
+				      1000000000ULL);
+	g_ws2812_one_high_cycles =
+		static_cast<uint32_t>((static_cast<uint64_t>(cpu_frequency_hz) * 700U) /
+				      1000000000ULL);
+	if (gpio_is_ready_dt(&ws2812_)) {
+		const int rc = gpio_pin_configure_dt(&ws2812_, GPIO_OUTPUT_INACTIVE);
+		if (rc == 0) {
+			ws2812_ready_ = true;
+			led_ready_ = true;
+			SendWs2812Color(0U, 0U, 0U);
+		} else {
+			LOG_WRN("WS2812 GPIO configuration failed (%d)", rc);
+		}
+	} else {
+		LOG_WRN("WS2812 GPIO controller not ready");
+	}
+#endif
 
 #if DT_NODE_EXISTS(DT_ALIAS(led0)) && DT_NODE_EXISTS(DT_ALIAS(led1)) &&                            \
 	DT_NODE_EXISTS(DT_ALIAS(led2))
@@ -132,7 +208,9 @@ int SysStateModule::Start()
 	led_g_ready_ = true;
 	led_b_ready_ = true;
 #else
-	LOG_WRN("sys_state init skipped: led aliases not found");
+	if (!ws2812_ready_) {
+		LOG_WRN("sys_state init skipped: led aliases not found");
+	}
 #endif
 
 #ifdef WBR_CONTROL_BUZZER_NODE
@@ -175,6 +253,27 @@ void SysStateModule::ApplyDuty(uint8_t r, uint8_t g, uint8_t b)
 	if (!led_ready_) {
 		return;
 	}
+
+#if DT_NODE_EXISTS(DT_ALIAS(ws2812))
+	if (ws2812_ready_) {
+		const auto scale = [](uint8_t value) {
+			return static_cast<uint8_t>((static_cast<uint16_t>(value) * 255U) /
+						    (kPwmLevels - 1U));
+		};
+		const uint8_t scaled_r = scale(r);
+		const uint8_t scaled_g = scale(g);
+		const uint8_t scaled_b = scale(b);
+		/* Refresh the latched pixel periodically.  The LED's 5 V rail may become
+		 * valid after the MCU, in which case a one-shot boot frame is lost.
+		 */
+		SendWs2812Color(scaled_r, scaled_g, scaled_b);
+		ws2812_r_ = scaled_r;
+		ws2812_g_ = scaled_g;
+		ws2812_b_ = scaled_b;
+		ws2812_color_valid_ = true;
+		return;
+	}
+#endif
 
 	const uint8_t peak = (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);
 	if (peak == 0U) {
@@ -224,7 +323,7 @@ void SysStateModule::RunLoop()
 	LOG_INF("status_indicator module started");
 
 	uint16_t breathe_step = 0U;
-	uint8_t color_idx = 0U;
+	msg::SystemStatusMessage system_status = { msg::kBooting, 0U };
 	wbr_control::scheduling::AbsolutePeriodicSchedule release(
 		kLedFrameMs, modules::scheduling::thread_phase_ms::kSystemState);
 
@@ -233,29 +332,25 @@ void SysStateModule::RunLoop()
 		missed_release_count_ = release.total_missed_releases();
 		const uint8_t brightness_pct = TriangleBrightnessPercent(breathe_step);
 		const uint8_t duty = PercentToDuty(brightness_pct);
+		(void)zbus_chan_read(&wbr_control_system_status_chan, &system_status, K_NO_WAIT);
 
 		if (led_ready_) {
-			switch (color_idx) {
-			case 0U:
-				ApplyDuty(duty, 0U, 0U);
-				break;
-			case 1U:
-				ApplyDuty(0U, duty, 0U);
-				break;
-			default:
-				ApplyDuty(0U, 0U, duty);
-				break;
+			if (system_status.phase == msg::kRunning) {
+				ApplyDuty(0U, static_cast<uint8_t>(kPwmLevels - 1U), 0U);
+			} else {
+				ApplyDuty(duty, duty / 3U, 0U);
 			}
 		}
 
-		const uint8_t buzzer_pct =
-			(breathe_step < kBuzzerTickSteps) ? kBuzzerTickPercent : 0U;
+		const uint8_t buzzer_pct = system_status.phase == msg::kBooting &&
+						    breathe_step < kBuzzerTickSteps
+						? kBuzzerTickPercent
+						: 0U;
 		ApplyBuzzerPercent(buzzer_pct);
 
 		++breathe_step;
 		if (breathe_step >= kBreathSteps) {
 			breathe_step = 0U;
-			color_idx = static_cast<uint8_t>((color_idx + 1U) % 3U);
 		}
 	}
 }
