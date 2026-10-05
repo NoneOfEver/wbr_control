@@ -27,6 +27,10 @@
 #include <msg/system_status_message.hpp>
 #include <chassis_controller/platform/board/board_identity.h>
 
+#if defined(CONFIG_WBR_CONTROL_CHASSIS_BOOT_TRACE)
+#include <SEGGER_RTT.h>
+#endif
+
 LOG_MODULE_REGISTER(app_main, LOG_LEVEL_INF);
 
 #if defined(CONFIG_WBR_CONTROL_RUNTIME_INIT_CAN) && CONFIG_WBR_CONTROL_RUNTIME_INIT_CAN
@@ -73,7 +77,6 @@ int main(void)
 				LOG_WRN("can_dispatch init skipped: no CAN device");
 			} else {
 				LOG_ERR("can_dispatch init failed: %d", rc);
-				return rc;
 			}
 		}
 	}
@@ -87,7 +90,6 @@ int main(void)
 				LOG_WRN("usb_session init skipped: no USB device");
 			} else {
 				LOG_ERR("usb_session init failed: %d", rc);
-				return rc;
 			}
 		}
 	}
@@ -182,6 +184,10 @@ int main(void)
 	}
 #endif
 	PublishSystemStatus(msg::kRunning, module_count);
+
+#if defined(CONFIG_WBR_CONTROL_CHASSIS_BOOT_TRACE)
+	SEGGER_RTT_WriteString(0, "main: modules started, sleeping\n");
+#endif
 
 	/* 初始化结束后主线程不再承担周期任务，各模块由自己的线程运行。 */
 	k_sleep(K_FOREVER);

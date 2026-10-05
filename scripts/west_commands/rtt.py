@@ -120,7 +120,7 @@ class Rtt(WestCommand):
                 process.wait()
 
     @classmethod
-    def _stop_openocd(cls, process):
+    def _stop_openocd(cls, process, target_handle):
         if process is None or process.poll() is not None:
             return
 
@@ -129,8 +129,7 @@ class Rtt(WestCommand):
         try:
             with socket.create_connection(("127.0.0.1", 4444), timeout=1) as control:
                 control.sendall(
-                    b"hpm6750.cpu0 rtt stop\n"
-                    b"shutdown\n"
+                    f"{target_handle} rtt stop\nshutdown\n".encode()
                 )
             process.wait(timeout=3)
             return
@@ -161,6 +160,18 @@ class Rtt(WestCommand):
             if args.build_dir
             else app_dir / "build" / "chassis_controller"
         )
+
+        runners_file = build_dir / "zephyr" / "runners.yaml"
+        if not runners_file.is_file():
+            log.die(f"Zephyr runner configuration not found: {runners_file}")
+        target_handle = None
+        for line in runners_file.read_text().splitlines():
+            marker = "--target-handle="
+            if marker in line:
+                target_handle = line.split(marker, 1)[1].strip()
+                break
+        if not target_handle:
+            log.die(f"OpenOCD target handle not found in: {runners_file}")
 
         if not launcher.is_file():
             log.die(f"RTT launcher not found: {launcher}")
@@ -248,7 +259,7 @@ class Rtt(WestCommand):
             previous_signals = self._ignore_cleanup_signals()
             try:
                 self._stop_process(terminal)
-                self._stop_openocd(server)
+                self._stop_openocd(server, target_handle)
                 if server is not None and server.poll() is None:
                     log.err("OpenOCD did not exit; the debugger USB interface may still be busy")
                 else:
