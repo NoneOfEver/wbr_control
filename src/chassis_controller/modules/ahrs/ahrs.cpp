@@ -18,6 +18,7 @@
 #include <zephyr/devicetree.h>
 
 #include <msg/onboard_imu_sample.hpp>
+#include <msg/imu_heater_status.hpp>
 #include <msg/oscilloscope_sample.hpp>
 #include <periodic_schedule.h>
 #include <chassis_controller/scheduling/thread_priorities.h>
@@ -137,6 +138,10 @@ void Ahrs::RunLoop()
 {
 	wbr_control::scheduling::AbsolutePeriodicSchedule release(kAhrsPeriodMs, 0U);
 	uint32_t missing_sample_ms = 0U;
+#if defined(CONFIG_WBR_CONTROL_AHRS_HEATER_TELEMETRY)
+	uint32_t sample_sequence = 0U;
+	uint32_t last_sample_ms = 0U;
+#endif
 	for (;;) {
 		(void)release.WaitForNextRelease();
 		OnboardImu::Burst burst = {};
@@ -146,6 +151,10 @@ void Ahrs::RunLoop()
 			missing_sample_ms = 0U;
 			ProcessBurst(burst);
 			UpdateImuTemperatureControl(kNominalSampleIntervalUs * 1.0e-6F);
+#if defined(CONFIG_WBR_CONTROL_AHRS_HEATER_TELEMETRY)
+			++sample_sequence;
+			last_sample_ms = k_uptime_get_32();
+#endif
 			//PublishTelemetry();
 		} else if (++missing_sample_ms >= 10U) {
 			/* No fresh temperature feedback: fail safe to heater off. */
@@ -153,6 +162,18 @@ void Ahrs::RunLoop()
 			temperature_control_ready_ = false;
 			(void)SetImuHeaterDutyPercent(0U);
 		}
+#if defined(CONFIG_WBR_CONTROL_AHRS_HEATER_TELEMETRY)
+		if (sample_ready || missing_sample_ms == 10U) {
+			msg::ImuHeaterStatus status = {};
+			status.last_sample_ms = last_sample_ms;
+			status.sample_sequence = sample_sequence;
+			status.temperature_c = imu_temperature_c_;
+			status.target_c = kTemperatureTargetC;
+			status.duty_percent = imu_heater_duty_percent_;
+			status.control_ready = temperature_control_ready_;
+			msg::latest_imu_heater_status.write(status);
+		}
+#endif
 	}
 }
 

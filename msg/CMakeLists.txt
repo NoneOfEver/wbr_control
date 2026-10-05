@@ -11,6 +11,7 @@ set(WBR_CONTROL_MSG_DEFINITIONS
   ${CMAKE_CURRENT_SOURCE_DIR}/chassismotors_feedback_raw.msg
   ${CMAKE_CURRENT_SOURCE_DIR}/gimbal_state.msg
   ${CMAKE_CURRENT_SOURCE_DIR}/hi91_imu_sample.msg
+  ${CMAKE_CURRENT_SOURCE_DIR}/imu_heater_status.msg
   ${CMAKE_CURRENT_SOURCE_DIR}/onboard_imu_sample.msg
   ${CMAKE_CURRENT_SOURCE_DIR}/pc_auto_aim_command.msg
   ${CMAKE_CURRENT_SOURCE_DIR}/remote_input_state.msg
@@ -30,6 +31,7 @@ set(WBR_CONTROL_MSG_GENERATED_HEADERS
   ${WBR_CONTROL_MSG_GENERATED_DIR}/chassismotors_feedback_raw.hpp
   ${WBR_CONTROL_MSG_GENERATED_DIR}/gimbal_state.hpp
   ${WBR_CONTROL_MSG_GENERATED_DIR}/hi91_imu_sample.hpp
+  ${WBR_CONTROL_MSG_GENERATED_DIR}/imu_heater_status.hpp
   ${WBR_CONTROL_MSG_GENERATED_DIR}/onboard_imu_sample.hpp
   ${WBR_CONTROL_MSG_GENERATED_DIR}/pc_auto_aim_command.hpp
   ${WBR_CONTROL_MSG_GENERATED_DIR}/remote_input_state.hpp

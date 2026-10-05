@@ -31,6 +31,14 @@ config WBR_CONTROL_MODULE_CHASSIS
 	help
 	  Register and start the 1 kHz independent-leg chassis controller.
 
+config WBR_CONTROL_CHASSIS_BOOT_TRACE
+	bool "Trace the first chassis control cycle over RTT"
+	default n
+	depends on WBR_CONTROL_MODULE_CHASSIS && USE_SEGGER_RTT
+	help
+	  Emit one marker after each stage of the first control cycle to locate
+	  a startup stall on new hardware. Keep disabled in production builds.
+
 config WBR_CONTROL_MODULE_REFEREE
 	bool "Enable referee module"
 	default n
@@ -77,6 +85,13 @@ config WBR_CONTROL_MODULE_AHRS
 	  the quaternion EKF estimator from each completed sample.
 	  Devicetree aliases onboard-imu-cs and onboard-imu-drdy must describe the
 	  custom PCB connections.
+
+config WBR_CONTROL_AHRS_HEATER_TELEMETRY
+	bool "Show onboard IMU heater state in chassis UART telemetry"
+	default n
+	depends on WBR_CONTROL_MODULE_AHRS && WBR_CONTROL_MODULE_CHASSIS
+	help
+	  Replace chassis VOFA channels 27-32 with IMU heater diagnostics.
 
 config WBR_CONTROL_ONBOARD_IMU_SPI_FREQUENCY_HZ
 	int "Onboard ICM42688P SPI frequency"
