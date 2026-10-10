@@ -1,4 +1,79 @@
-# HPM5E EtherCAT slave test application integration
+# HPM5E EtherCAT slave bring-up
+
+This directory now contains a buildable SSC 5.13 FreeRun slave for the
+`dust-hpm5e3y` board.  It is the first-link bring-up image, not the final robot
+process-data image:
+
+- Vendor ID: `0x00000000` (experimental only)
+- Product code: `0x57425231`
+- Revision: `0x00010000`
+- CoE mailbox: 128 bytes in each direction
+- SM2/RxPDO: one 32-bit `OutputCounter` at object `0x7010`
+- SM3/TxPDO: one 32-bit `InputCounter` at object `0x6000`
+- FreeRun with AL-event interrupt; DC/SYNC0 is disabled
+- the generated 2048-byte SII image is served from RAM
+
+The generated files retain their original SSC licence headers and must only be
+used under the licence that accompanied SSC Tool.
+
+## Build and flash
+
+From the `wbr_control` directory:
+
+```sh
+CCACHE_DISABLE=1 /Users/panpoming/Documents/zephyr_projects/.venv/bin/west \
+  build -p always -b dust-hpm5e3y \
+  -d build-hpm5e3y-ethercat-ssc test/ethercat_slave_test
+
+/Users/panpoming/Documents/zephyr_projects/.venv/bin/west \
+  flash -d build-hpm5e3y-ethercat-ssc
+```
+
+The firmware files are generated as:
+
+- `build-hpm5e3y-ethercat-ssc/zephyr/zephyr.elf`
+- `build-hpm5e3y-ethercat-ssc/zephyr/zephyr.bin`
+- `build-hpm5e3y-ethercat-ssc/zephyr/zephyr.hex`
+
+RTT prints `WBR HPM5E SSC FreeRun slave ready` after the ESC and SSC have
+started.
+
+## First IgH master check
+
+Connect the master's EtherCAT port directly to one port of the slave, power the
+board, and run on the NUC:
+
+```sh
+sudo systemctl restart ethercat.service
+ethercat master
+ethercat slaves
+ethercat slaves -v
+ethercat pdos
+```
+
+The slave should progress through `INIT`, `PREOP`, `SAFEOP`, and `OP`.  For an
+explicit request:
+
+```sh
+sudo ethercat states OP
+ethercat slaves
+```
+
+If it does not reach OP, preserve these diagnostics before changing the SII or
+PDO configuration:
+
+```sh
+ethercat slaves -v
+ethercat pdos
+ethercat sii_read -p 0 > hpm5e-sii.bin
+sudo journalctl -k -b --no-pager | grep -i ethercat | tail -n 200
+```
+
+The matching ESI is `esi/WBR_HPM5E_FreeRun.xml`. IgH does not require the ESI
+for basic discovery, but the identity and PDO layout reported by the slave must
+match it.
+
+## Production integration status
 
 The repository contains all license-independent parts of the slave test:
 
@@ -9,8 +84,9 @@ The repository contains all license-independent parts of the slave test:
 - an alignment-safe SSC process-data bridge;
 - host-native and Zephyr protocol tests.
 
-Beckhoff SSC generated sources are deliberately not committed. HPM SDK also
-omits them for the same licensing reason. Before the hardware integration build:
+The sections below describe the later 72-byte/96-byte robot integration. They
+do not describe the small counter PDOs in the current bring-up firmware. Before
+the production hardware integration build:
 
 1. obtain SSC Tool under the applicable Beckhoff/ETG license;
 2. create the objects and PDOs listed in

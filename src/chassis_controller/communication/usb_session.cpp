@@ -17,6 +17,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/atomic.h>
 
 #include <msg/booster_state.hpp>
 #include <msg/gimbal_state.hpp>
@@ -93,6 +94,10 @@ uint32_t g_pc_command_sequence = 0U;
 #if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
 K_SEM_DEFINE(g_mpc_rx_kick, 0, 1);
 volatile uint16_t g_mpc_rx_len = 0U;
+atomic_t g_mpc_out_callbacks = 0;
+atomic_t g_mpc_in_callbacks = 0;
+atomic_t g_mpc_last_out_bytes = 0;
+atomic_t g_mpc_last_in_bytes = 0;
 #endif
 
 static const uint8_t g_device_descriptor[] = {
@@ -312,6 +317,8 @@ void UsbInterruptOutCallback(uint8_t busid, uint8_t ep, uint32_t nbytes)
 	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
 	g_mpc_rx_len = static_cast<uint16_t>(MIN(static_cast<size_t>(nbytes),
 						    sizeof(g_vendor_read_buffer)));
+	atomic_inc(&g_mpc_out_callbacks);
+	atomic_set(&g_mpc_last_out_bytes, nbytes);
 	k_sem_give(&g_mpc_rx_kick);
 	#elif defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 	EnqueueUsbRx(g_vendor_read_buffer, MIN(static_cast<size_t>(nbytes),
@@ -335,6 +342,10 @@ void UsbInterruptInCallback(uint8_t busid, uint8_t ep, uint32_t nbytes)
 	ARG_UNUSED(ep);
 	ARG_UNUSED(nbytes);
 	g_vendor_tx_busy = false;
+	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
+	atomic_inc(&g_mpc_in_callbacks);
+	atomic_set(&g_mpc_last_in_bytes, nbytes);
+	#endif
 	#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 	k_sem_give(&g_pc_link_tx_kick);
 	#endif
@@ -529,6 +540,14 @@ uint32_t g_mpc_received_count = 0U;
 uint32_t g_mpc_invalid_count = 0U;
 uint32_t g_mpc_tx_busy_count = 0U;
 uint32_t g_mpc_out_rearm_failure_count = 0U;
+uint32_t g_mpc_worker_frames = 0U;
+uint32_t g_mpc_tx_submitted_count = 0U;
+uint32_t g_mpc_tx_error_count = 0U;
+
+bool LogMpcDiagnosticEvent(uint32_t count)
+{
+	return count <= 3U || (count % 100U) == 0U;
+}
 uint32_t g_mpc_last_command_sequence = 0U;
 uint64_t g_mpc_last_command_receive_us = 0U;
 float g_mpc_last_left_force_n = 0.0F;
@@ -536,7 +555,7 @@ float g_mpc_last_right_force_n = 0.0F;
 bool g_mpc_have_force_command = false;
 
 constexpr float kMpcMinimumForceN = 20.0F;
-constexpr float kMpcMaximumForceN = 150.0F;
+constexpr float kMpcMaximumForceN = 200.0F;
 constexpr float kMpcMaximumForceStepN = 30.0F;
 constexpr uint32_t kMpcMaximumValidForUs = 30000U;
 constexpr uint32_t kMpcMaximumStateLag = 2U;
@@ -673,12 +692,28 @@ void HandleUsbMpcCommand(const protocols::MpcLinkCommand &input)
 
 void ProcessMpcFrame(const uint8_t *data, size_t len)
 {
+	++g_mpc_worker_frames;
+	if (g_mpc_worker_frames <= 3U) {
+		LOG_INF("usb_mpc worker frame=%u len=%u out_cb=%ld in_cb=%ld",
+			g_mpc_worker_frames, static_cast<unsigned int>(len),
+			static_cast<long>(atomic_get(&g_mpc_out_callbacks)),
+			static_cast<long>(atomic_get(&g_mpc_in_callbacks)));
+	}
 	protocols::MpcLinkCommand command{};
-	if (protocols::DecodeMpcLinkCommand(data, len, &command) != 0) {
+	const int decode_rc = protocols::DecodeMpcLinkCommand(data, len, &command);
+	if (decode_rc != 0) {
 		++g_mpc_invalid_count;
+		if (LogMpcDiagnosticEvent(g_mpc_invalid_count)) {
+			LOG_WRN("usb_mpc decode failed rc=%d len=%u invalid=%u", decode_rc,
+				static_cast<unsigned int>(len), g_mpc_invalid_count);
+		}
 		return;
 	}
 	++g_mpc_received_count;
+	if (g_mpc_received_count <= 3U) {
+		LOG_INF("usb_mpc decoded seq=%u mode=%u", command.sequence,
+			static_cast<unsigned int>(command.mode));
+	}
 	HandleUsbMpcCommand(command);
 
 	uint8_t packet[protocols::kMpcLinkStateFrameSize];
@@ -691,6 +726,19 @@ void ProcessMpcFrame(const uint8_t *data, size_t len)
 	const int rc = platform::SendUsb(packet, packet_len);
 	if (rc == -EBUSY) {
 		++g_mpc_tx_busy_count;
+	}
+	if (rc < 0) {
+		++g_mpc_tx_error_count;
+		if (LogMpcDiagnosticEvent(g_mpc_tx_error_count)) {
+			LOG_WRN("usb_mpc state send failed rc=%d busy=%u configured=%u errors=%u",
+				rc, static_cast<unsigned int>(g_vendor_tx_busy),
+				static_cast<unsigned int>(g_configured), g_mpc_tx_error_count);
+		}
+	} else {
+		++g_mpc_tx_submitted_count;
+		if (g_mpc_tx_submitted_count <= 3U) {
+			LOG_INF("usb_mpc state submitted seq=%u bytes=%d", state.sequence, rc);
+		}
 	}
 	if ((g_mpc_received_count % 10000U) == 0U) {
 		LOG_INF("usb_mpc rx=%u invalid=%u tx_busy=%u rearm_fail=%u",
@@ -707,6 +755,10 @@ void RearmMpcOutWithRetry()
 			return;
 		}
 		++g_mpc_out_rearm_failure_count;
+		if (LogMpcDiagnosticEvent(g_mpc_out_rearm_failure_count)) {
+			LOG_WRN("usb_mpc OUT rearm failed rc=%d failures=%u", rc,
+				g_mpc_out_rearm_failure_count);
+		}
 		/* A transient qTD/endpoint busy result must not leave the event-driven
 		 * worker permanently disarmed. Sleep so control/CAN work can run, then
 		 * retry without depending on another USB completion to wake us.
@@ -718,7 +770,20 @@ void RearmMpcOutWithRetry()
 void UsbMpcLoop(void *, void *, void *)
 {
 	for (;;) {
-		(void)k_sem_take(&g_mpc_rx_kick, K_FOREVER);
+		if (k_sem_take(&g_mpc_rx_kick, K_SECONDS(1)) != 0) {
+			if (g_configured) {
+				LOG_INF("usb_mpc idle out=%ld/%ldB in=%ld/%ldB worker=%u rx=%u invalid=%u tx=%u errors=%u busy=%u armed=%u",
+					static_cast<long>(atomic_get(&g_mpc_out_callbacks)),
+					static_cast<long>(atomic_get(&g_mpc_last_out_bytes)),
+					static_cast<long>(atomic_get(&g_mpc_in_callbacks)),
+					static_cast<long>(atomic_get(&g_mpc_last_in_bytes)),
+					g_mpc_worker_frames, g_mpc_received_count, g_mpc_invalid_count,
+					g_mpc_tx_submitted_count, g_mpc_tx_error_count,
+					static_cast<unsigned int>(g_vendor_tx_busy),
+					static_cast<unsigned int>(g_vendor_out_armed));
+			}
+			continue;
+		}
 		const uint16_t rx_len = g_mpc_rx_len;
 		if (rx_len != 0U) {
 			ProcessMpcFrame(g_vendor_read_buffer, rx_len);

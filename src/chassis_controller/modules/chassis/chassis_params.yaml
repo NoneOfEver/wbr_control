@@ -106,7 +106,7 @@ support_force_estimator:
   feedback_gain: 0.1
   feedback_correction_limit_n: 5.0
   feedback_minimum_force_n: 20.0
-  feedback_maximum_force_n: 150.0
+  feedback_maximum_force_n: 200.0
 
 flight:
   liftoff_force_ratio: 0.2
@@ -150,7 +150,7 @@ vmc:
   extend_velocity_feedforward: 60.0
   velocity_feedforward_deadband_mps: 0.005
   integral_force_limit_n: 60.0
-  force_limit_n: 150.0
+  force_limit_n: 200.0
 
 motion_estimator:
   process_noise: 0.1

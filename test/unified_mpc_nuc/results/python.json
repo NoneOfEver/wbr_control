@@ -1,0 +1,624 @@
+{
+  "method": "Python orchestration + native OSQP; unpaced CPU-bound simulation; no transport",
+  "power_assumption": "sum of absolute mechanical wheel power; speeds frozen across horizon; cap is total, per-wheel mode uses cap/2",
+  "geometry": "fixed 0.25m legs; production FK/Jacobian; offline IK table, online measured-angle interpolation; 54Nm joints",
+  "timing_includes": "Python constraint coefficient/bounds updates, OSQP matrix update/refactor and solve; excludes validation, plant step, communication",
+  "cpu_affinity": [
+    2
+  ],
+  "osqp_version": "1.1.3",
+  "results": [
+    {
+      "scenario": "small",
+      "horizon": 20,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.1,
+      "watts_total": 40.0,
+      "cycles": 2000,
+      "variables": 80,
+      "constraint_rows": 200,
+      "update_and_solve_us": {
+        "mean": 465.302455,
+        "p50": 462.2555,
+        "p99": 585.70763,
+        "p999": 616.9940280000013,
+        "max": 705.636
+      },
+      "solver_only_us": {
+        "mean": 78.74380749999999,
+        "p50": 75.047,
+        "p99": 205.41384999999997,
+        "p999": 206.2554830000019,
+        "max": 288.934
+      },
+      "iterations": {
+        "mean": 10.49,
+        "p50": 10.0,
+        "p99": 30.0,
+        "p999": 30.0,
+        "max": 40.0
+      },
+      "over_1ms": 0,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 0.9145001286868663,
+      "final_state": [
+        -0.006298975483885925,
+        0.008957583376975217,
+        0.0005728854817000743,
+        -0.0011140800325893155,
+        0.0007869656165707332,
+        -0.008611821887112403,
+        0.0007896828957388046,
+        -0.008616603974692497,
+        -1.4731383814583962e-05,
+        -3.8122600261733994e-05
+      ]
+    },
+    {
+      "scenario": "disturbance",
+      "horizon": 20,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.1,
+      "watts_total": 40.0,
+      "cycles": 2000,
+      "variables": 80,
+      "constraint_rows": 200,
+      "update_and_solve_us": {
+        "mean": 460.5080485,
+        "p50": 454.624,
+        "p99": 528.59676,
+        "p999": 549.0593190000005,
+        "max": 889.77
+      },
+      "solver_only_us": {
+        "mean": 79.75230549999999,
+        "p50": 75.048,
+        "p99": 145.72303000000002,
+        "p999": 152.58403199999998,
+        "max": 492.416
+      },
+      "iterations": {
+        "mean": 10.655,
+        "p50": 10.0,
+        "p99": 20.0,
+        "p999": 20.0,
+        "max": 60.0
+      },
+      "over_1ms": 0,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 1.6930676083584906,
+      "final_state": [
+        -0.010068272801515924,
+        0.008407479855433846,
+        0.0020997211546136827,
+        -0.004084354558476849,
+        0.0035030864537342874,
+        -0.017482987912216526,
+        0.003513344266376906,
+        -0.017502187529400692,
+        -5.83648348234419e-06,
+        -0.00010970903003596685
+      ]
+    },
+    {
+      "scenario": "fast-power",
+      "horizon": 20,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.1,
+      "watts_total": 40.0,
+      "cycles": 2000,
+      "variables": 80,
+      "constraint_rows": 200,
+      "update_and_solve_us": {
+        "mean": 479.7107455,
+        "p50": 454.798,
+        "p99": 693.3976199999998,
+        "p999": 875.9647860000018,
+        "max": 1975.849
+      },
+      "solver_only_us": {
+        "mean": 99.0213725,
+        "p50": 75.1115,
+        "p99": 298.2419699999996,
+        "p999": 494.54554000000076,
+        "max": 1567.7130000000002
+      },
+      "iterations": {
+        "mean": 13.53,
+        "p50": 10.0,
+        "p99": 40.09999999999991,
+        "p999": 70.0,
+        "max": 220.0
+      },
+      "over_1ms": 1,
+      "not_solved": 0,
+      "max_qp_violation": 0.004060684236527834,
+      "max_frozen_speed_power_violation_w": 0.0039435660089210955,
+      "power_active_cycles": 407,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 4.047121105843998,
+      "final_state": [
+        -0.018233126325661757,
+        -0.07690306320552269,
+        0.002856598273005503,
+        -0.005556523832430641,
+        0.041385318877398804,
+        -0.08964180793957964,
+        0.041399228730888124,
+        -0.08966771064743442,
+        0.00026569022537915817,
+        -0.000961545810721748
+      ]
+    },
+    {
+      "scenario": "small",
+      "horizon": 20,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.1,
+      "watts_total": 80.0,
+      "cycles": 2000,
+      "variables": 80,
+      "constraint_rows": 200,
+      "update_and_solve_us": {
+        "mean": 461.23249200000004,
+        "p50": 455.885,
+        "p99": 588.06336,
+        "p999": 599.6855070000005,
+        "max": 695.239
+      },
+      "solver_only_us": {
+        "mean": 80.18483599999999,
+        "p50": 76.5745,
+        "p99": 209.69205,
+        "p999": 212.11945900000234,
+        "max": 293.49399999999997
+      },
+      "iterations": {
+        "mean": 10.49,
+        "p50": 10.0,
+        "p99": 30.0,
+        "p999": 30.0,
+        "max": 40.0
+      },
+      "over_1ms": 0,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 0.9145001286868663,
+      "final_state": [
+        -0.006298975483885925,
+        0.008957583376975217,
+        0.0005728854817000743,
+        -0.0011140800325893155,
+        0.0007869656165707332,
+        -0.008611821887112403,
+        0.0007896828957388046,
+        -0.008616603974692497,
+        -1.4731383814583962e-05,
+        -3.8122600261733994e-05
+      ]
+    },
+    {
+      "scenario": "disturbance",
+      "horizon": 20,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.1,
+      "watts_total": 80.0,
+      "cycles": 2000,
+      "variables": 80,
+      "constraint_rows": 200,
+      "update_and_solve_us": {
+        "mean": 462.18315799999993,
+        "p50": 455.74,
+        "p99": 530.90488,
+        "p999": 546.2594700000014,
+        "max": 917.614
+      },
+      "solver_only_us": {
+        "mean": 81.46400200000001,
+        "p50": 76.56700000000001,
+        "p99": 148.72910000000002,
+        "p999": 152.3649130000008,
+        "max": 510.003
+      },
+      "iterations": {
+        "mean": 10.655,
+        "p50": 10.0,
+        "p99": 20.0,
+        "p999": 20.0,
+        "max": 60.0
+      },
+      "over_1ms": 0,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 1.6930676083584906,
+      "final_state": [
+        -0.010068272801515924,
+        0.008407479855433846,
+        0.0020997211546136827,
+        -0.004084354558476849,
+        0.0035030864537342874,
+        -0.017482987912216526,
+        0.003513344266376906,
+        -0.017502187529400692,
+        -5.83648348234419e-06,
+        -0.00010970903003596685
+      ]
+    },
+    {
+      "scenario": "fast-power",
+      "horizon": 20,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.1,
+      "watts_total": 80.0,
+      "cycles": 2000,
+      "variables": 80,
+      "constraint_rows": 200,
+      "update_and_solve_us": {
+        "mean": 464.987787,
+        "p50": 455.996,
+        "p99": 538.7780700000001,
+        "p999": 675.169013000003,
+        "max": 1939.95
+      },
+      "solver_only_us": {
+        "mean": 83.9416135,
+        "p50": 76.572,
+        "p99": 150.85414,
+        "p999": 288.61706200000225,
+        "max": 1533.578
+      },
+      "iterations": {
+        "mean": 11.02,
+        "p50": 10.0,
+        "p99": 20.0,
+        "p999": 40.0,
+        "max": 210.0
+      },
+      "over_1ms": 1,
+      "not_solved": 0,
+      "max_qp_violation": 0.008047732820841702,
+      "max_frozen_speed_power_violation_w": 0.004955924768609066,
+      "power_active_cycles": 14,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 4.548958561744152,
+      "final_state": [
+        -0.01816921201155147,
+        -0.0497715175033281,
+        0.0004111151149635971,
+        -0.0007997440604326375,
+        0.03102978532384312,
+        -0.07243305388054569,
+        0.031031655804990805,
+        -0.07243591818640131,
+        0.00018427156931028504,
+        -0.0007360829706411147
+      ]
+    },
+    {
+      "scenario": "small",
+      "horizon": 40,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.2,
+      "watts_total": 40.0,
+      "cycles": 2000,
+      "variables": 160,
+      "constraint_rows": 400,
+      "update_and_solve_us": {
+        "mean": 1440.8818999999999,
+        "p50": 1420.6995,
+        "p99": 1679.15458,
+        "p999": 2557.476088000107,
+        "max": 3133.34
+      },
+      "solver_only_us": {
+        "mean": 274.22024749999997,
+        "p50": 257.3085,
+        "p99": 506.29918999999995,
+        "p999": 530.4191420000035,
+        "max": 1863.258
+      },
+      "iterations": {
+        "mean": 10.64,
+        "p50": 10.0,
+        "p99": 20.0,
+        "p999": 20.0,
+        "max": 60.0
+      },
+      "over_1ms": 2000,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 0.9136021941355476,
+      "final_state": [
+        -0.006289019867711426,
+        0.008940350369810135,
+        0.0005707803406687219,
+        -0.001110295555581773,
+        0.0007869015965426952,
+        -0.008600452606380553,
+        0.0007896227637550504,
+        -0.008605239111781597,
+        -1.4693500757056524e-05,
+        -3.799386555800018e-05
+      ]
+    },
+    {
+      "scenario": "disturbance",
+      "horizon": 40,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.2,
+      "watts_total": 40.0,
+      "cycles": 2000,
+      "variables": 160,
+      "constraint_rows": 400,
+      "update_and_solve_us": {
+        "mean": 1436.8742135,
+        "p50": 1420.5945000000002,
+        "p99": 1674.6673600000001,
+        "p999": 1692.1077470000016,
+        "max": 1702.149
+      },
+      "solver_only_us": {
+        "mean": 272.678743,
+        "p50": 257.2815,
+        "p99": 505.10065999999995,
+        "p999": 512.0548870000008,
+        "max": 516.219
+      },
+      "iterations": {
+        "mean": 10.595,
+        "p50": 10.0,
+        "p99": 20.0,
+        "p999": 20.0,
+        "max": 20.0
+      },
+      "over_1ms": 2000,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 1.6930657842446757,
+      "final_state": [
+        -0.01006829222298922,
+        0.008407464334828248,
+        0.002099731684839579,
+        -0.004084382980925193,
+        0.0035031250973195827,
+        -0.017482687718129795,
+        0.003513383259946098,
+        -0.017501889215254644,
+        -5.842476571952875e-06,
+        -0.00010991954625030176
+      ]
+    },
+    {
+      "scenario": "fast-power",
+      "horizon": 40,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.2,
+      "watts_total": 40.0,
+      "cycles": 2000,
+      "variables": 160,
+      "constraint_rows": 400,
+      "update_and_solve_us": {
+        "mean": 1500.0528164999998,
+        "p50": 1424.3249999999998,
+        "p99": 1934.8388299999986,
+        "p999": 2572.2536180001007,
+        "max": 7362.112
+      },
+      "solver_only_us": {
+        "mean": 333.8238095,
+        "p50": 258.723,
+        "p99": 740.1391299999983,
+        "p999": 1392.4092330000158,
+        "max": 6171.64
+      },
+      "iterations": {
+        "mean": 13.25,
+        "p50": 10.0,
+        "p99": 30.0,
+        "p999": 50.01000000000204,
+        "max": 240.0
+      },
+      "over_1ms": 2000,
+      "not_solved": 0,
+      "max_qp_violation": 0.004084331754512505,
+      "max_frozen_speed_power_violation_w": 0.004084331754512505,
+      "power_active_cycles": 250,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 3.6426481282881022,
+      "final_state": [
+        -0.013135868130189526,
+        -0.10097158328743121,
+        0.002636428849524609,
+        -0.005127271395352689,
+        0.047144977710437956,
+        -0.09325324066687966,
+        0.04715766934308039,
+        -0.09327617074038967,
+        0.0003281926743962765,
+        -0.0010707007849028968
+      ]
+    },
+    {
+      "scenario": "small",
+      "horizon": 40,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.2,
+      "watts_total": 80.0,
+      "cycles": 2000,
+      "variables": 160,
+      "constraint_rows": 400,
+      "update_and_solve_us": {
+        "mean": 1438.407017,
+        "p50": 1420.3175,
+        "p99": 1679.15615,
+        "p999": 1722.2342830000127,
+        "max": 3130.786
+      },
+      "solver_only_us": {
+        "mean": 274.4862925,
+        "p50": 257.6755,
+        "p99": 506.4697699999999,
+        "p999": 533.2709670000032,
+        "max": 1897.396
+      },
+      "iterations": {
+        "mean": 10.64,
+        "p50": 10.0,
+        "p99": 20.0,
+        "p999": 20.0,
+        "max": 60.0
+      },
+      "over_1ms": 2000,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 0.9136021941355476,
+      "final_state": [
+        -0.006289019867711426,
+        0.008940350369810135,
+        0.0005707803406687219,
+        -0.001110295555581773,
+        0.0007869015965426952,
+        -0.008600452606380553,
+        0.0007896227637550504,
+        -0.008605239111781597,
+        -1.4693500757056524e-05,
+        -3.799386555800018e-05
+      ]
+    },
+    {
+      "scenario": "disturbance",
+      "horizon": 40,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.2,
+      "watts_total": 80.0,
+      "cycles": 2000,
+      "variables": 160,
+      "constraint_rows": 400,
+      "update_and_solve_us": {
+        "mean": 1439.6346855000002,
+        "p50": 1419.3400000000001,
+        "p99": 1682.1960399999998,
+        "p999": 2768.4852670001883,
+        "max": 3808.729
+      },
+      "solver_only_us": {
+        "mean": 273.770216,
+        "p50": 257.629,
+        "p99": 507.84018999999995,
+        "p999": 530.1813810000137,
+        "max": 754.028
+      },
+      "iterations": {
+        "mean": 10.595,
+        "p50": 10.0,
+        "p99": 20.0,
+        "p999": 20.0,
+        "max": 20.0
+      },
+      "over_1ms": 2000,
+      "not_solved": 0,
+      "max_qp_violation": 0.0,
+      "max_frozen_speed_power_violation_w": 0.0,
+      "power_active_cycles": 0,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 1.6930657842446757,
+      "final_state": [
+        -0.01006829222298922,
+        0.008407464334828248,
+        0.002099731684839579,
+        -0.004084382980925193,
+        0.0035031250973195827,
+        -0.017482687718129795,
+        0.003513383259946098,
+        -0.017501889215254644,
+        -5.842476571952875e-06,
+        -0.00010991954625030176
+      ]
+    },
+    {
+      "scenario": "fast-power",
+      "horizon": 40,
+      "prediction_dt_s": 0.005,
+      "prediction_span_s": 0.2,
+      "watts_total": 80.0,
+      "cycles": 2000,
+      "variables": 160,
+      "constraint_rows": 400,
+      "update_and_solve_us": {
+        "mean": 1462.774601,
+        "p50": 1420.507,
+        "p99": 1882.80368,
+        "p999": 2897.1914770000812,
+        "max": 5403.914
+      },
+      "solver_only_us": {
+        "mean": 297.5873515,
+        "p50": 257.991,
+        "p99": 711.8749,
+        "p999": 738.0965820000016,
+        "max": 4221.079
+      },
+      "iterations": {
+        "mean": 11.65,
+        "p50": 10.0,
+        "p99": 30.0,
+        "p999": 30.0,
+        "max": 160.0
+      },
+      "over_1ms": 2000,
+      "not_solved": 0,
+      "max_qp_violation": 0.007937681866593493,
+      "max_frozen_speed_power_violation_w": 0.00423016003215082,
+      "power_active_cycles": 13,
+      "joint_active_side_cycles": 0,
+      "model_envelope_resets": 0,
+      "peak_state": 4.500020150979168,
+      "final_state": [
+        -0.018200289400993826,
+        -0.05016909297709789,
+        0.00031142013427783735,
+        -0.0006057856559238008,
+        0.03120184699765529,
+        -0.07275406066459211,
+        0.031203220835321118,
+        -0.07275595407264507,
+        0.00018558179640791876,
+        -0.0007402456042635076
+      ]
+    }
+  ]
+}

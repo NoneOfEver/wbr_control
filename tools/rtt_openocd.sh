@@ -46,11 +46,9 @@ if [[ ! -f "${runners_file}" ]]; then
     exit 1
 fi
 
-target_handle="$(sed -n 's/^[[:space:]]*- --target-handle=//p' "${runners_file}" | head -n 1)"
-if [[ -z "${target_handle}" ]]; then
-    echo "Unable to find OpenOCD target handle in ${runners_file}" >&2
-    exit 1
-fi
+# Query the target selected by the loaded OpenOCD configuration. SDK versions
+# use different Tcl variable names; runners.yaml may contain a stale handle.
+target_command='[target current]'
 
 openocd_configs=()
 while IFS= read -r config; do
@@ -68,7 +66,7 @@ if [[ ! "${rtt_address}" =~ ^0x[0-9A-Fa-f]+$ ]]; then
 fi
 
 echo "RTT control block: ${rtt_address}"
-echo "OpenOCD target: ${target_handle}"
+echo "OpenOCD target: selected by the loaded target configuration"
 echo "RTT channel 0 will listen on TCP port ${rtt_port}."
 echo "RTT access mode: halt-polling=${rtt_halt_polling}, interval=${rtt_poll_interval_ms} ms"
 if [[ "${WEST_RTT_AUTO_ATTACH:-0}" != "1" ]]; then
@@ -80,11 +78,12 @@ exec "${openocd}" \
     -s "${hpm_openocd}" \
     "${openocd_configs[@]}" \
     -c init \
+    -c 'echo "RTT target: [target current]"' \
     -c "riscv set_mem_access sysbus" \
     -c "riscv virt2phys_mode off" \
-    -c "${target_handle} rtt halt_polling ${rtt_halt_polling}" \
-    -c "${target_handle} rtt setup ${rtt_address} 0x100 \"SEGGER RTT\"" \
-    -c "${target_handle} rtt polling_interval ${rtt_poll_interval_ms}" \
-    -c "${target_handle} rtt start" \
+    -c "${target_command} rtt halt_polling ${rtt_halt_polling}" \
+    -c "${target_command} rtt setup ${rtt_address} 0x100 \"SEGGER RTT\"" \
+    -c "${target_command} rtt polling_interval ${rtt_poll_interval_ms}" \
+    -c "${target_command} rtt start" \
     -c "rtt server start ${rtt_port} 0" \
     -c "debug_level 1"

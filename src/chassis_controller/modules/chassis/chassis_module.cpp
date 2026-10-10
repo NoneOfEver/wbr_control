@@ -388,30 +388,28 @@ void ChassisModule::PublishTelemetry(const ChassisCycleInput &input,
 	msg::OscilloscopeSample sample = {};
 	sample.sequence = ++telemetry_sequence_;
 	sample.uptime_ms = k_uptime_get_32();
-	sample.channel_count = msg::kOscilloscopeMaxChannels;
+	sample.channel_count = 18;
 
 	sample.value[0] = balance_state_x10;
 	// 腿长闭环。
 	sample.value[1] = balance_controller_.target_leg_length();
 	sample.value[2] = input.leg.left.length;
 	sample.value[3] = input.leg.right.length;
-	sample.value[4] = input.leg.left.length_rate;
-	sample.value[5] = input.leg.right.length_rate;
 	// 横滚补偿和俯仰姿态。
-	sample.value[6] = input.roll / kDegToRad;
-	sample.value[7] = output.roll_reference / kDegToRad;
-	sample.value[8] = output.roll_compensation_force;
-	sample.value[9] = input.pitch / kDegToRad;
+	sample.value[4] = input.roll / kDegToRad;
+	sample.value[5] = output.roll_reference / kDegToRad;
+	sample.value[6] = output.roll_compensation_force;
+	sample.value[7] = input.pitch / kDegToRad;
 	// 行驶状态、目标/实测 yaw 速度和物理输出。
-	sample.value[10] = output.estimated_body_speed;
-	sample.value[11] = balance_controller_.target_yaw_rate();
-	sample.value[12] = balance_controller_.filtered_yaw_rate();
-	sample.value[13] = output.physical_wheel_torque.left;
-	sample.value[14] = output.physical_wheel_torque.right;
-	sample.value[15] = output.leg_axial_force.left;
-	sample.value[16] = output.leg_axial_force.right;
-	sample.value[17] = support_force.filtered_force_n.left;
-	sample.value[18] = support_force.filtered_force_n.right;
+	sample.value[8] = output.estimated_body_speed;
+	sample.value[9] = balance_controller_.target_yaw_rate();
+	sample.value[10] = balance_controller_.filtered_yaw_rate();
+	sample.value[11] = output.physical_wheel_torque.left;
+	sample.value[12] = output.physical_wheel_torque.right;
+	sample.value[13] = output.leg_axial_force.left;
+	sample.value[14] = output.leg_axial_force.right;
+	sample.value[15] = support_force.filtered_force_n.left;
+	sample.value[16] = support_force.filtered_force_n.right;
 	// 动作阶段按十位区分：Flight=10+, Jump=20+, Climb=30+, Recovery=40+。
 	float action_phase = 0.0F;
 	if (state_machine_.state() == ChassisControlState::kFlight) {
@@ -423,44 +421,17 @@ void ChassisModule::PublishTelemetry(const ChassisCycleInput &input,
 	} else if (state_machine_.state() == ChassisControlState::kRecovery) {
 		action_phase = 40.0F + static_cast<float>(recovery_controller_.phase());
 	}
-	sample.value[19] = action_phase;
+	sample.value[17] = action_phase;
 
-	/* The six motor slots use the CAN scheduler order:
-	 * left/right wheel, left B/D, right B/D. Keep the live VOFA frame focused
-	 * on the current feedback-staleness investigation; the heavier USB, PLIC,
-	 * worker and cumulative CAN diagnostics remain available internally. */
-	for (uint8_t slot = 0U; slot < 6U; ++slot) {
-		sample.value[20U + slot] =
-			static_cast<float>(input.motor_feedback_age_us[slot]);
-	}
-	sample.value[26] = static_cast<float>(input.motor_stale_mask);
-#if defined(CONFIG_WBR_CONTROL_AHRS_HEATER_TELEMETRY)
-	/* Heater bring-up uses the existing chassis VOFA frame and keeps channels
-	 * 0-26 unchanged. */
-	msg::ImuHeaterStatus heater = {};
-	if (msg::latest_imu_heater_status.read(heater) &&
-	    heater.sample_sequence != 0U) {
-		sample.value[27] = heater.temperature_c;
-		sample.value[28] = heater.target_c;
-		sample.value[29] = heater.duty_percent;
-		sample.value[30] = static_cast<float>(sample.uptime_ms - heater.last_sample_ms);
-		sample.value[31] = static_cast<float>(heater.sample_sequence);
-		sample.value[32] = heater.control_ready ? 1.0F : 0.0F;
-	} else {
-		sample.value[30] = -1.0F;
-	}
-#else
-	/* Temporary IMU direction-calibration channels. Rates are converted to
-	 * deg/s so each rate can be compared directly with the slope of its angle
-	 * trace in VOFA. */
-	sample.value[27] = static_cast<float>(input.roll / kDegToRad);
-	sample.value[28] = static_cast<float>(input.roll_rate / kDegToRad);
-	sample.value[29] = static_cast<float>(input.pitch / kDegToRad);
-	sample.value[30] = static_cast<float>(input.pitch_rate / kDegToRad);
-	sample.value[31] = input.imu.yaw_deg;
-	sample.value[32] = static_cast<float>(
-		static_cast<double>(input.imu.yaw_rate_rad_s) / kDegToRad);
-#endif
+	// /* The six motor slots use the CAN scheduler order:
+	//  * left/right wheel, left B/D, right B/D. Keep the live VOFA frame focused
+	//  * on the current feedback-staleness investigation; the heavier USB, PLIC,
+	//  * worker and cumulative CAN diagnostics remain available internally. */
+	// for (uint8_t slot = 0U; slot < 6U; ++slot) {
+	// 	sample.value[20U + slot] =
+	// 		static_cast<float>(input.motor_feedback_age_us[slot]);
+	// }
+	// sample.value[26] = static_cast<float>(input.motor_stale_mask);
 	msg::latest_oscilloscope_sample.write(sample);
 }
 
