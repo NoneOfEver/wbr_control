@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include "peripherals.h"
+#include <protocols/usb_bridge/fault_diagnostics.hpp>
 #include <chassis_controller/communication/can_dispatch.h>
 #include <chassis_controller/communication/usb_session.h>
 #include <chassis_controller/motor_map.h>
@@ -28,8 +29,12 @@ uint32_t NowUs()
 	return k_cyc_to_us_floor64(k_cycle_get_64());
 }
 
-void SafeStop()
+#ifdef CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS
+wire::FaultSnapshot fault_stats;
+#endif
+bool SafeStop()
 {
+	bool submitted = true;
 	command_lease.Reset();
 	// Physical shutdown policy remains local even if the host/USB disappears.
 	uint8_t exit[8]{};
@@ -45,8 +50,25 @@ void SafeStop()
 				std::memcpy(frames[i].data, exit,
 					    8); // wheel group defaults to zero current
 		}
-		platform::SubmitCanStandardFrames(group == 0 ? 3 : 2, frames, 3);
+		if (platform::SubmitCanStandardFrames(group == 0 ? 3 : 2, frames, 3) != 0)
+			submitted = false;
 	}
+	return submitted;
+}
+
+void PolicyStop(wire::StopReason reason)
+{
+	const bool submitted = SafeStop();
+#ifdef CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS
+	fault_stats.last_stop_submit_us = NowUs();
+	fault_stats.stop_flags = uint32_t(reason) | (submitted ? 0U : wire::kStopSubmissionError);
+	if (reason == wire::StopReason::Explicit) ++fault_stats.explicit_stops;
+	if (reason == wire::StopReason::LeaseExpired || reason == wire::StopReason::UsbDeconfigured)
+		++fault_stats.lease_stops;
+#else
+	(void)submitted;
+	(void)reason;
+#endif
 }
 
 void ReceiveCan(const platform::CanReceiveFrame &frame, void *)
@@ -159,11 +181,16 @@ bool Forward(const wire::Commands &packet)
 	}
 	k_sched_unlock();
 	if (!success) {
-		SafeStop();
+		PolicyStop(wire::StopReason::CanSubmissionFailed);
 		atomic_clear(&session_id);
 		return false;
 	}
-	command_lease.Renew(sequence, NowUs());
+	const uint32_t accepted_us = NowUs();
+	command_lease.Renew(sequence, accepted_us);
+#ifdef CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS
+	++fault_stats.accepted;
+	fault_stats.last_accepted_us = accepted_us;
+#endif
 	return true;
 }
 } // namespace
@@ -202,6 +229,14 @@ int main()
 		if (platform::ReceiveUsb(packet.data(), packet.size(), &length, 1) == 0) {
 			if (length == 64 &&
 			    wire::HasHeader(packet.data(), length, wire::Kind::Hello)) {
+#ifdef CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS
+				Packet fault_reply{};
+				const bool fault_query = packet[10] == wire::kFaultQueryPage;
+				if (fault_query) {
+					fault_stats.prior_session = gateway::Session();
+					wire::EncodeFaultSnapshot(fault_reply, fault_stats);
+				}
+#endif
 				SafeStop();
 				const uint32_t requested = wire::U32(packet.data() + 12);
 				const unsigned key = irq_lock();
@@ -217,21 +252,31 @@ int main()
 					wire::Put32(reply.data() + 16, capabilities);
 					wire::Put32(reply.data() + 20, wire::kOutBytes);
 					wire::Put32(reply.data() + 24, wire::kInBytes);
+#ifdef CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS
+					if (fault_query) std::memcpy(reply.data()+28, fault_reply.data()+28, 36);
+					else
+#endif
 					gateway::AppendUartProbeStatus(reply);
 					k_msgq_put(&session_replies, &reply, K_NO_WAIT);
 					k_sem_give(&uplink_event);
 				}
-			} else if (length == 128 && gateway::Session()) {
-				(void)Forward(packet);
+			} else if (length == 128) {
+				const bool accepted = gateway::Session() && Forward(packet);
+#ifdef CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS
+				if (!accepted) ++fault_stats.rejected;
+#else
+				(void)accepted;
+#endif
 			} else if (length == 64 &&
 				   wire::HasHeader(packet.data(), length, wire::Kind::Stop) &&
 				   wire::U32(packet.data() + 12) == gateway::Session()) {
-				SafeStop();
+				PolicyStop(wire::StopReason::Explicit);
 				atomic_clear(&session_id);
 			}
 		}
-		if (command_lease.Expired(NowUs(), platform::IsUsbConfigured())) {
-			SafeStop();
+		const bool configured = platform::IsUsbConfigured();
+		if (command_lease.Expired(NowUs(), configured)) {
+			PolicyStop(configured ? wire::StopReason::LeaseExpired : wire::StopReason::UsbDeconfigured);
 			atomic_clear(&session_id); // new handshake required to resume
 		}
 	}

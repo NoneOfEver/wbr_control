@@ -43,3 +43,10 @@ config WBR_UART10_FIFO_ERRATUM_PROBE
     help
       Set only UART10 RX FIFO threshold to not-empty before starting RX DMA.
       Keeps 128-byte double buffers and the existing publication policy.
+
+config WBR_GATEWAY_FAULT_DIAGNOSTICS
+    bool "Test only: report command lease and policy-stop snapshots"
+    default n
+    help
+      A diagnostic Hello page reports counters captured before that Hello's
+      stop/reset. No periodic replies; production defaults leave this off.

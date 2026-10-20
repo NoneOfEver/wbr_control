@@ -61,3 +61,9 @@ when NUC and the robot are available. Default host operation keeps outputs disab
 UART10's receive batching is under controlled investigation. See
 [the evidence and opt-in PLIC A/B experiment](UART10_INVESTIGATION.md).
 The probe remains disabled in the normal build pending hardware confirmation.
+
+`CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS` adds a default-off FLT1 Hello page for
+stop-only process exit/kill/freeze testing. The snapshot is taken before that
+Hello resets the old session. It records stop CAN group submission, not hardware
+completion or physical motor stop. See the matching companion repository's
+`chassis_controller/measurements/fault_recovery/README.md` for the test sequence.
