@@ -3,6 +3,9 @@
 #include <chassis_controller/modules/ahrs/onboard_imu_module.h>
 #include <drivers/uart_hpmicro.h>
 #include <hpm_l1c_drv.h>
+#ifdef CONFIG_WBR_UART10_FIFO_ERRATUM_PROBE
+#include <hpm_uart_drv.h>
+#endif
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/uart.h>
@@ -11,6 +14,11 @@
 #include <algorithm>
 #include <cstring>
 
+#ifdef CONFIG_WBR_UART10_LINE_IDLE
+int Uart10LineIdleStart(const device *, uint32_t);
+bool Uart10LineIdleHealthy();
+#endif
+
 #ifdef CONFIG_WBR_UART10_PLIC_PROBE
 extern "C" uint32_t wbr_uart_rx_probe_version(void);
 #endif
@@ -18,8 +26,12 @@ namespace
 {
 namespace wire = wbr::bridge;
 constexpr size_t kChunkBytes = 40, kBufferBytes = 128, kRingBytes = 4096;
+constexpr int32_t kUartRxTimeoutUs = 1000;
 __attribute__((section(".nocache"), aligned(64))) uint8_t hi91_ring[kRingBytes];
 __attribute__((aligned(64))) uint8_t uart_buffers[2][2][kBufferBytes];
+#ifdef CONFIG_WBR_UART10_LINE_IDLE
+__attribute__((section(".nocache"), aligned(64))) uint8_t remote_idle_buffers[2][kBufferBytes];
+#endif
 K_THREAD_STACK_DEFINE(uart_stack, 2048);
 K_THREAD_STACK_DEFINE(imu_stack, 2048);
 k_thread uart_thread, imu_thread;
@@ -29,6 +41,13 @@ struct UartPort {
 	wire::Port port{};
 	unsigned buffer_set = 0, next_buffer = 1;
 	uint32_t sequence = 0;
+	uint8_t *Buffer(unsigned index) const
+	{
+#ifdef CONFIG_WBR_UART10_LINE_IDLE
+		if (port == wire::Port::Remote) return remote_idle_buffers[index];
+#endif
+		return uart_buffers[buffer_set][index];
+	}
 	void Publish(const uint8_t *data, size_t size)
 	{
 		while (size) {
@@ -55,6 +74,9 @@ struct UartProbe {
 	uint32_t rx_available = 0, rx_timeout = 0, other_irq = 0, last_irq = 0;
 	uint32_t timeout_flush = 0, zero_flush = 0, status_errors = 0;
 	uint32_t total = 0, offset = 0, pending = 0, added = 0;
+	uint32_t irq_ids[16]{};
+	const uint8_t *offset_buffer = nullptr;
+	uint32_t expected_offset = 0, offset_errors = 0;
 } probe;
 void ProbeIrq(const device *, void *) { ++probe.irq_count; }
 #endif
@@ -71,6 +93,13 @@ void AsyncUart(const device *dev, uart_event *event, void *user)
 	case UART_RX_RDY: {
 #ifdef CONFIG_WBR_UART10_PLIC_PROBE
 		if (port.port == wire::Port::Remote) {
+			if ((probe.offset_buffer && probe.offset_buffer != event->data.rx.buf) ||
+			    event->data.rx.offset != probe.expected_offset ||
+			    !event->data.rx.len || event->data.rx.len > kBufferBytes ||
+			    event->data.rx.offset > kBufferBytes - event->data.rx.len)
+				++probe.offset_errors;
+			probe.offset_buffer = event->data.rx.buf;
+			probe.expected_offset = event->data.rx.offset + event->data.rx.len;
 			const uint32_t now = k_cyc_to_us_floor64(k_cycle_get_64());
 			++probe.ready_count;
 			probe.partial_count += event->data.rx.len < kBufferBytes;
@@ -87,19 +116,29 @@ void AsyncUart(const device *dev, uart_event *event, void *user)
 			HPM_L1C_CACHELINE_ALIGN_DOWN(reinterpret_cast<uint32_t>(data));
 		const uint32_t end = HPM_L1C_CACHELINE_ALIGN_UP(reinterpret_cast<uint32_t>(data) +
 								event->data.rx.len);
-		l1c_dc_invalidate(begin, end - begin);
+		if (!(IS_ENABLED(CONFIG_WBR_UART10_LINE_IDLE) && port.port == wire::Port::Remote))
+			l1c_dc_invalidate(begin, end - begin);
 		port.Publish(data, event->data.rx.len);
 		break;
 	}
+	case UART_RX_BUF_RELEASED:
+#ifdef CONFIG_WBR_UART10_PLIC_PROBE
+		if (port.port == wire::Port::Remote &&
+		    event->data.rx_buf.buf == probe.offset_buffer) {
+			probe.offset_buffer = nullptr;
+			probe.expected_offset = 0;
+		}
+#endif
+		break;
 	case UART_RX_BUF_REQUEST: {
 		const unsigned next = port.next_buffer;
 		port.next_buffer ^= 1;
-		(void)uart_rx_buf_rsp(dev, uart_buffers[port.buffer_set][next], kBufferBytes);
+		(void)uart_rx_buf_rsp(dev, port.Buffer(next), kBufferBytes);
 		break;
 	}
 	case UART_RX_DISABLED:
 		port.next_buffer = 1;
-		(void)uart_rx_enable(dev, uart_buffers[port.buffer_set][0], kBufferBytes, 1000);
+		(void)uart_rx_enable(dev, port.Buffer(0), kBufferBytes, kUartRxTimeoutUs);
 		break;
 	case UART_RX_STOPPED:
 		// Advance stream sequence even if no chunk is emitted. Host discards a
@@ -114,7 +153,7 @@ void AsyncUart(const device *dev, uart_event *event, void *user)
 bool StartAsync(UartPort &port)
 {
 	return device_is_ready(port.dev) && uart_callback_set(port.dev, AsyncUart, &port) == 0 &&
-	       uart_rx_enable(port.dev, uart_buffers[port.buffer_set][0], kBufferBytes, 1000) == 0;
+	       uart_rx_enable(port.dev, port.Buffer(0), kBufferBytes, kUartRxTimeoutUs) == 0;
 }
 void Hi91Loop(void *, void *, void *)
 {
@@ -178,12 +217,33 @@ void AppendUartProbeStatus(wire::Packet &packet)
 {
 #ifdef CONFIG_WBR_UART10_PLIC_PROBE
 	const unsigned key = irq_lock();
-	wire::Put32(packet.data() + 28, wbr_uart_rx_probe_version()); // URT3: driver-path instrumentation
+	// Keep the driver-version reference: a missing hook patch must fail to link.
+	const uint32_t driver_version = wbr_uart_rx_probe_version();
+	wire::Put32(packet.data() + 28, IS_ENABLED(CONFIG_WBR_UART10_IIR_HISTOGRAM) ?
+		0x34545255U : driver_version);
 	const uint32_t flags = 1U |
 		(irq_is_enabled(DT_IRQN(DT_CHOSEN(wbr_control_remote_input_uart))) ? 2U : 0U) |
 		(probe.added > 65535U ? 4U : 0U) |
+		(IS_ENABLED(CONFIG_WBR_UART10_FIFO_ERRATUM_PROBE) ? 8U : 0U) |
+		(IS_ENABLED(CONFIG_WBR_UART10_LINE_IDLE) ? 16U : 0U) |
+		(probe.offset_errors ? 64U : 0U) |
 		((probe.last_irq & 0xffU) << 8) | (std::min(probe.status_errors, 65535U) << 16);
 	wire::Put32(packet.data() + 32, flags);
+#ifdef CONFIG_WBR_UART10_LINE_IDLE
+	if (!Uart10LineIdleHealthy()) wire::Put32(packet.data() + 32, flags | 32U);
+#endif
+#ifdef CONFIG_WBR_UART10_IIR_HISTOGRAM
+	// Seven disjoint classes cover all sixteen IDs. No last-value inference.
+	constexpr uint8_t ids[] = {1, 4, 12, 2, 6, 0};
+	uint32_t unexpected = 0;
+	for (unsigned i = 0; i < 16; ++i) {
+		if (i != 1 && i != 4 && i != 12 && i != 2 && i != 6 && i != 0)
+			unexpected += probe.irq_ids[i];
+	}
+	for (unsigned i = 0; i < sizeof(ids); ++i)
+		wire::Put32(packet.data() + 36 + i * 4, probe.irq_ids[ids[i]]);
+	wire::Put32(packet.data() + 60, unexpected);
+#else
 	wire::Put32(packet.data() + 36, probe.rx_available);
 	wire::Put32(packet.data() + 40, probe.rx_timeout);
 	wire::Put32(packet.data() + 44, probe.other_irq);
@@ -191,6 +251,7 @@ void AppendUartProbeStatus(wire::Packet &packet)
 	wire::Put32(packet.data() + 52, probe.zero_flush);
 	wire::Put32(packet.data() + 56, (probe.total & 0xffffU) | ((probe.offset & 0xffffU) << 16));
 	wire::Put32(packet.data() + 60, (probe.pending & 0xffffU) | ((probe.added & 0xffffU) << 16));
+#endif
 	irq_unlock(key);
 #else
 	(void)packet;
@@ -199,8 +260,28 @@ void AppendUartProbeStatus(wire::Packet &packet)
 uint32_t StartPeripherals()
 {
 	uint32_t capabilities = 0;
+#ifdef CONFIG_WBR_UART10_LINE_IDLE
+	if (!device_is_ready(remote.dev) || uart_hpm_rx_line_idle_enable(remote.dev) != 0)
+		return 0;
+#endif
+#ifdef CONFIG_WBR_UART10_FIFO_ERRATUM_PROBE
+	if (device_is_ready(remote.dev)) {
+		// HPM6700 erratum E00018: RFIFOT=0, single-byte DMA requests.
+		// Other FIFO settings match uart_hpm_configure(); do not reset FIFO.
+		uart_fifo_ctrl_t fifo{};
+		fifo.fifo_enable = true;
+		fifo.dma_enable = true;
+		fifo.tx_fifo_level = uart_tx_fifo_trg_not_full;
+		fifo.rx_fifo_level = uart_rx_fifo_trg_not_empty;
+		uart_config_fifo_ctrl(reinterpret_cast<UART_Type *>(
+			DT_REG_ADDR(DT_CHOSEN(wbr_control_remote_input_uart))), &fifo);
+	}
+#endif
 	if (StartAsync(remote)) {
 		capabilities |= 2;
+#ifdef CONFIG_WBR_UART10_LINE_IDLE
+		if (Uart10LineIdleStart(remote.dev, kUartRxTimeoutUs) != 0) return 0;
+#endif
 #ifdef CONFIG_WBR_UART10_PLIC_PROBE
 		// A/B probe only: the HPM async init leaves this PLIC source masked,
 		// while uart_rx_enable() enables only the UART peripheral IRQ. Keep
@@ -238,6 +319,7 @@ extern "C" void wbr_uart_rx_probe(const device *dev, uint32_t event,
 	switch (event) {
 	case 1:
 		probe.last_irq = a;
+		++probe.irq_ids[a & 15U];
 		if (a == 0x4) ++probe.rx_available;
 		else if (a == 0xc) ++probe.rx_timeout;
 		else ++probe.other_irq;

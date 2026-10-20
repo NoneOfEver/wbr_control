@@ -1,5 +1,14 @@
 source "Kconfig.zephyr"
 
+config WBR_UART10_LINE_IDLE
+    bool "Dust V3 UART10 RX-line idle via TRGM1 and GPTMR2"
+    default n
+    depends on BOARD_DUST_HPM6750 && UART_ASYNC_API && UART_INTERRUPT_DRIVEN
+    help
+      Uses PB13/TRGM1_P03 (wired to UART10_RXD), GPTMR2 channels 0/2,
+      and a 1000-us line-idle threshold. Retains 128-byte double buffers.
+      UART FIFO RX interrupts are disabled; DMA completion stays enabled.
+
 config WBR_CONTROL_ONBOARD_IMU_RAW
     bool "Acquire raw onboard IMU bursts without a controller or AHRS"
     default y
@@ -18,3 +27,19 @@ config WBR_UART10_PLIC_PROBE
       Enables only the remote UART interrupt-controller source. The baseline
       leaves this off. Build separate baseline/probe images and compare UART
       capture CSVs without changing DMA buffer size or USB forwarding policy.
+
+config WBR_UART10_IIR_HISTOGRAM
+    bool "Investigation only: report all UART10 IIR ID classes (URT4)"
+    default n
+    depends on WBR_UART10_PLIC_PROBE
+    help
+      Replaces URT3 flush snapshot fields with cumulative IIR class counters.
+      Uses the driver's existing IIR observation, without extra register reads.
+
+config WBR_UART10_FIFO_ERRATUM_PROBE
+    bool "Investigation only: UART10 E00018 RFIFOT=0 comparison"
+    default n
+    depends on WBR_UART10_IIR_HISTOGRAM
+    help
+      Set only UART10 RX FIFO threshold to not-empty before starting RX DMA.
+      Keeps 128-byte double buffers and the existing publication policy.

@@ -1,1 +1,8 @@
 &cherryusb_usb0 { status = "okay"; };
+
+/ {
+	uart10_idle_timer: uart10-idle-timer {
+		interrupt-parent = <&plic>;
+		interrupts = <62 2>;
+	};
+};

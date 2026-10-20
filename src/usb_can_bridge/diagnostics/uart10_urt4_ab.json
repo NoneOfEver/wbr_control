@@ -1,0 +1,323 @@
+{
+  "host": "wbr-nuc",
+  "date": "2026-10-21",
+  "host_realtime": false,
+  "reception": "128-byte async double buffers; publication unchanged",
+  "host_health_fix": true,
+  "records": [
+    {
+      "group": "A",
+      "csv": "/home/wbr-infantry/wbr_realtime_lab/results/uart_probe_urt4_A_healthfix.csv",
+      "log": "/home/wbr-infantry/wbr_realtime_lab/results/uart_probe_urt4_A_healthfix.log",
+      "requested_s": 60.0,
+      "elapsed_s": 60.001,
+      "termination": "duration",
+      "snapshots": {
+        "before": {
+          "image": "URT4",
+          "probe": 1,
+          "plic_enabled": 1,
+          "fifo_erratum_probe": 0,
+          "last_irq_id": 1,
+          "irq_none": 13003,
+          "irq_rx_available": 0,
+          "irq_timeout": 3249,
+          "irq_tx": 0,
+          "irq_line_status": 0,
+          "irq_modem": 0,
+          "irq_unexpected": 0
+        },
+        "after": {
+          "image": "URT4",
+          "probe": 1,
+          "plic_enabled": 1,
+          "fifo_erratum_probe": 0,
+          "last_irq_id": 1,
+          "irq_none": 21443,
+          "irq_rx_available": 0,
+          "irq_timeout": 3249,
+          "irq_tx": 0,
+          "irq_line_status": 0,
+          "irq_modem": 0,
+          "irq_unexpected": 0
+        }
+      },
+      "irq_deltas": {
+        "irq_none": 8440,
+        "irq_rx_available": 0,
+        "irq_timeout": 0,
+        "irq_tx": 0,
+        "irq_line_status": 0,
+        "irq_modem": 0,
+        "irq_unexpected": 0
+      },
+      "ports": {
+        "1": {
+          "chunks": 3296,
+          "bytes": 105472,
+          "host_capture_span_s": 59.955050216,
+          "observation_gap_us": {
+            "n": 3295,
+            "p50": 3,
+            "p99": 84400,
+            "max": 84599
+          },
+          "common_burst_patterns": [
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                40,
+                8
+              ],
+              "total_bytes": 128,
+              "count": 824
+            }
+          ]
+        },
+        "2": {
+          "chunks": 163971,
+          "bytes": 4920000,
+          "host_capture_span_s": 60.000873953,
+          "observation_gap_us": {
+            "n": 163970,
+            "p50": 5,
+            "p99": 1114,
+            "max": 1163
+          },
+          "common_burst_patterns": [
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                16
+              ],
+              "total_bytes": 96,
+              "count": 26314
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                2
+              ],
+              "total_bytes": 82,
+              "count": 21036
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                14
+              ],
+              "total_bytes": 94,
+              "count": 5321
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                10
+              ],
+              "total_bytes": 90,
+              "count": 73
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                9
+              ],
+              "total_bytes": 89,
+              "count": 72
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                8
+              ],
+              "total_bytes": 88,
+              "count": 72
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                5
+              ],
+              "total_bytes": 85,
+              "count": 69
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                7
+              ],
+              "total_bytes": 87,
+              "count": 68
+            }
+          ]
+        }
+      }
+    },
+    {
+      "group": "B",
+      "csv": "/home/wbr-infantry/wbr_realtime_lab/results/uart_probe_urt4_B_healthfix.csv",
+      "log": "/home/wbr-infantry/wbr_realtime_lab/results/uart_probe_urt4_B_healthfix.log",
+      "requested_s": 60.0,
+      "elapsed_s": 60.0008,
+      "termination": "duration",
+      "snapshots": {
+        "before": {
+          "image": "URT4",
+          "probe": 1,
+          "plic_enabled": 1,
+          "fifo_erratum_probe": 1,
+          "last_irq_id": 1,
+          "irq_none": 23924,
+          "irq_rx_available": 0,
+          "irq_timeout": 583,
+          "irq_tx": 0,
+          "irq_line_status": 0,
+          "irq_modem": 0,
+          "irq_unexpected": 0
+        },
+        "after": {
+          "image": "URT4",
+          "probe": 1,
+          "plic_enabled": 1,
+          "fifo_erratum_probe": 1,
+          "last_irq_id": 1,
+          "irq_none": 129449,
+          "irq_rx_available": 0,
+          "irq_timeout": 583,
+          "irq_tx": 0,
+          "irq_line_status": 0,
+          "irq_modem": 0,
+          "irq_unexpected": 0
+        }
+      },
+      "irq_deltas": {
+        "irq_none": 105525,
+        "irq_rx_available": 0,
+        "irq_timeout": 0,
+        "irq_tx": 0,
+        "irq_line_status": 0,
+        "irq_modem": 0,
+        "irq_unexpected": 0
+      },
+      "ports": {
+        "1": {
+          "chunks": 3296,
+          "bytes": 105472,
+          "host_capture_span_s": 59.93742833,
+          "observation_gap_us": {
+            "n": 3295,
+            "p50": 2,
+            "p99": 83560,
+            "max": 83775
+          },
+          "common_burst_patterns": [
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                40,
+                8
+              ],
+              "total_bytes": 128,
+              "count": 824
+            }
+          ]
+        },
+        "2": {
+          "chunks": 164044,
+          "bytes": 4919946,
+          "host_capture_span_s": 60.00012826,
+          "observation_gap_us": {
+            "n": 164043,
+            "p50": 4,
+            "p99": 1122,
+            "max": 1182
+          },
+          "common_burst_patterns": [
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                16
+              ],
+              "total_bytes": 96,
+              "count": 26273
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                2
+              ],
+              "total_bytes": 82,
+              "count": 20991
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                14
+              ],
+              "total_bytes": 94,
+              "count": 5329
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                11
+              ],
+              "total_bytes": 91,
+              "count": 73
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                6
+              ],
+              "total_bytes": 86,
+              "count": 70
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                7
+              ],
+              "total_bytes": 87,
+              "count": 68
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                12
+              ],
+              "total_bytes": 92,
+              "count": 68
+            },
+            {
+              "chunk_bytes": [
+                40,
+                40,
+                4
+              ],
+              "total_bytes": 84,
+              "count": 67
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

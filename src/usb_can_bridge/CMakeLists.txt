@@ -31,6 +31,7 @@ target_sources(app PRIVATE main.cpp peripherals.cpp
  ${WBR_CONTROL_ROOT}/src/protocols/motors/dm_motor_protocol.cpp
  ${generated}/msg/messages_generated.cpp ${message_headers}
  ${generated}/params/motors_params_generated.h)
+target_sources_ifdef(CONFIG_WBR_UART10_LINE_IDLE app PRIVATE uart10_line_idle.cpp)
 target_include_directories(app PRIVATE ${WBR_CONTROL_ROOT} ${WBR_CONTROL_ROOT}/src
  ${generated} ${generated}/params)
 target_compile_definitions(app PRIVATE WBR_USB_BULK_TRANSPORT=1 WBR_USB_RAW_OUT_BYTES=128 WBR_CAN_FORWARDING=1)
