@@ -84,3 +84,37 @@ fails when Send returns false even if UsbLink has no stored error string.
 
 Total UART-wire-to-NUC latency remains unmeasured: pre-observation buffering and
 post-submit USB transit cannot be recovered by subtracting unsynchronized clocks.
+
+## A/B result and comparison with HI91
+
+The first PLIC-enabled run completed 60.0006 s. SBUS still had 84.6-ms
+parser-update gaps and 3292 chunks/105344 bytes, so unmasking PLIC alone has
+not removed batching. The prior explanation is insufficient; verify the actual
+image and execution path before changing reception policy.
+
+HI91 uses continuously running circular DMA and a 1-ms software poll of the
+DMA producer position. Publication therefore does not require a UART timeout
+ISR or a full DMA buffer. It retains 16 outstanding bytes as a DMA-write guard.
+SBUS uses finite 128-byte double buffers and publishes only on RX_RDY events,
+which originate from full DMA completion or timeout-driven partial flush.
+The structural defect is the missing effective partial-publication mechanism;
+PLIC enable was only one prerequisite, not proof of timeout delivery.
+Do not copy the 16-byte retention guard into SBUS unchanged: its lower baud and
+inter-frame gaps can postpone the tail of a frame until the next transmission.
+
+The opt-in probe now adds a URT2 marker and cumulative counters to otherwise
+unused Ready bytes 28..63. Counts are ISR entries, RX_RDY callbacks, callbacks
+shorter than 128 bytes, callbacks exactly 128 bytes, bytes, maximum callback gap,
+and last callback length. PLIC status is sampled with the snapshot. A registered
+user IRQ callback counts entries after the driver's ISR without reading IIR again.
+Counters do not identify the IRQ source; an ISR count alone is not timeout proof.
+No periodic diagnostic packets are emitted; the production build leaves these
+Ready bytes zero and compiles out counters.
+
+Use the updated host tool with `--probe-status` to read status before capture
+and via a second stop/Hello handshake after capture. URT2 absent means this
+instrumented image is not verified. URT2 + PLIC on + no ISR increment points to
+interrupt delivery/peripheral conditions; ISR increment + full-only RX_RDY
+points to source identification/partial-DMA flush. Partial RX_RDY with continued
+host grouping moves investigation to publication/queue timing. These are
+branching observations, not asserted outcomes.

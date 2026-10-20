@@ -44,6 +44,14 @@ struct UartPort {
 		}
 	}
 };
+#ifdef CONFIG_WBR_UART10_PLIC_PROBE
+struct UartProbe {
+	uint32_t irq_count = 0, ready_count = 0, partial_count = 0;
+	uint32_t full_count = 0, bytes = 0, max_gap_us = 0, last_us = 0, last_length = 0;
+	bool seen = false;
+} probe;
+void ProbeIrq(const device *, void *) { ++probe.irq_count; }
+#endif
 UartPort remote{DEVICE_DT_GET(DT_CHOSEN(wbr_control_remote_input_uart)), wire::Port::Remote, 0};
 UartPort hi91{DEVICE_DT_GET(DT_CHOSEN(wbr_control_hi91_uart)), wire::Port::Hi91, 0};
 #if DT_HAS_CHOSEN(wbr_control_referee_uart)
@@ -55,6 +63,19 @@ void AsyncUart(const device *dev, uart_event *event, void *user)
 	auto &port = *static_cast<UartPort *>(user);
 	switch (event->type) {
 	case UART_RX_RDY: {
+#ifdef CONFIG_WBR_UART10_PLIC_PROBE
+		if (port.port == wire::Port::Remote) {
+			const uint32_t now = k_cyc_to_us_floor64(k_cycle_get_64());
+			++probe.ready_count;
+			probe.partial_count += event->data.rx.len < kBufferBytes;
+			probe.full_count += event->data.rx.len == kBufferBytes;
+			probe.bytes += event->data.rx.len;
+			if (probe.seen) probe.max_gap_us = std::max(probe.max_gap_us, now - probe.last_us);
+			probe.last_us = now;
+			probe.last_length = event->data.rx.len;
+			probe.seen = true;
+		}
+#endif
 		const auto *data = event->data.rx.buf + event->data.rx.offset;
 		const uint32_t begin =
 			HPM_L1C_CACHELINE_ALIGN_DOWN(reinterpret_cast<uint32_t>(data));
@@ -147,6 +168,25 @@ void ImuLoop(void *, void *, void *)
 
 namespace gateway
 {
+void AppendUartProbeStatus(wire::Packet &packet)
+{
+#ifdef CONFIG_WBR_UART10_PLIC_PROBE
+	const unsigned key = irq_lock();
+	wire::Put32(packet.data() + 28, 0x32545255); // URT2: identifies this diagnostic image
+	const uint32_t flags = 1U | (irq_is_enabled(DT_IRQN(DT_CHOSEN(wbr_control_remote_input_uart))) ? 2U : 0U);
+	wire::Put32(packet.data() + 32, flags);
+	wire::Put32(packet.data() + 36, probe.irq_count);
+	wire::Put32(packet.data() + 40, probe.ready_count);
+	wire::Put32(packet.data() + 44, probe.partial_count);
+	wire::Put32(packet.data() + 48, probe.full_count);
+	wire::Put32(packet.data() + 52, probe.bytes);
+	wire::Put32(packet.data() + 56, probe.max_gap_us);
+	wire::Put32(packet.data() + 60, probe.last_length);
+	irq_unlock(key);
+#else
+	(void)packet;
+#endif
+}
 uint32_t StartPeripherals()
 {
 	uint32_t capabilities = 0;
@@ -156,6 +196,7 @@ uint32_t StartPeripherals()
 		// A/B probe only: the HPM async init leaves this PLIC source masked,
 		// while uart_rx_enable() enables only the UART peripheral IRQ. Keep
 		// DMA buffers and timeout handling unchanged to isolate this gate.
+		uart_irq_callback_user_data_set(remote.dev, ProbeIrq, nullptr);
 		irq_enable(DT_IRQN(DT_CHOSEN(wbr_control_remote_input_uart)));
 #endif
 	}

@@ -217,6 +217,7 @@ int main()
 					wire::Put32(reply.data() + 16, capabilities);
 					wire::Put32(reply.data() + 20, wire::kOutBytes);
 					wire::Put32(reply.data() + 24, wire::kInBytes);
+					gateway::AppendUartProbeStatus(reply);
 					k_msgq_put(&session_replies, &reply, K_NO_WAIT);
 					k_sem_give(&uplink_event);
 				}
