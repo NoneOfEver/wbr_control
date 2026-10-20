@@ -3,60 +3,102 @@
  */
 
 /**
-* @file src/chassis_controller/communication/can_dispatch.h
+ * @file src/chassis_controller/communication/can_dispatch.h
  * @ingroup wbr_platform
  * @brief 实现 CAN 收发调度、合帧和诊断统计。
- * @details 这是业务层可见的平台边界。返回负 errno 表示参数、设备或传输失败；调用方不得绕过该接口直接依赖具体驱动实例。
+ * @details 这是业务层可见的平台边界。返回负 errno
+ * 表示参数、设备或传输失败；调用方不得绕过该接口直接依赖具体驱动实例。
  */
 
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 
-namespace platform {
+namespace platform
+{
 
 /** @brief 周期 CAN 指令对应的固定发送槽位。 */
 enum class CanTxSlot : uint8_t {
 	kLeftWheel = 0, ///< 左侧车轮电机发送槽位。
-	kRightWheel, ///< 右侧车轮电机发送槽位。
-	kLeftJointB, ///< 左腿 B 关节电机发送槽位。
-	kLeftJointD, ///< 左腿 D 关节电机发送槽位。
-	kRightJointB, ///< 右腿 B 关节电机发送槽位。
-	kRightJointD, ///< 右腿 D 关节电机发送槽位。
-	kCount, ///< 枚举项数量，仅用于数组边界。
+	kRightWheel,    ///< 右侧车轮电机发送槽位。
+	kLeftJointB,    ///< 左腿 B 关节电机发送槽位。
+	kLeftJointD,    ///< 左腿 D 关节电机发送槽位。
+	kRightJointB,   ///< 右腿 B 关节电机发送槽位。
+	kRightJointD,   ///< 右腿 D 关节电机发送槽位。
+	kCount,         ///< 枚举项数量，仅用于数组边界。
 };
 
 /** @brief CAN 控制器的当前健康状态。 */
 struct CanBusHealth {
-	bool valid = false; ///< 数据有效标志；为 `false` 时其余字段不得用于控制。
-	uint8_t state = 0U; ///< 协议、总线或控制状态枚举值。
-	uint8_t tx_error_count = 0U; ///< CAN 控制器发送错误计数器快照。
-	uint8_t rx_error_count = 0U; ///< CAN 控制器接收错误计数器快照。
+	bool valid = false;                 ///< 数据有效标志；为 `false` 时其余字段不得用于控制。
+	uint8_t state = 0U;                 ///< 协议、总线或控制状态枚举值。
+	uint8_t tx_error_count = 0U;        ///< CAN 控制器发送错误计数器快照。
+	uint8_t rx_error_count = 0U;        ///< CAN 控制器接收错误计数器快照。
 	uint32_t async_tx_error_count = 0U; ///< 异步发送完成回调报告的累计错误次数。
 };
 
 /** @brief 单个 CAN 发送槽位的运行统计。 */
 struct CanTxSlotStats {
-	uint32_t submitted_count = 0U; ///< 上层向该槽位提交帧的累计次数。
-	uint32_t enqueued_count = 0U; ///< 该槽位实际进入发送队列的累计次数。
-	uint32_t completed_count = 0U; ///< 该槽位发送完成的累计次数。
-	uint32_t received_count = 0U; ///< 对应电机反馈帧的累计接收次数。
-	uint32_t coalesced_count = 0U; ///< 新指令覆盖尚未发送旧指令的累计次数。
-	uint32_t max_rx_interval_us = 0U; ///< 相邻反馈帧最大接收间隔，单位为微秒。
+	uint32_t submitted_count = 0U;         ///< 上层向该槽位提交帧的累计次数。
+	uint32_t enqueued_count = 0U;          ///< 该槽位实际进入发送队列的累计次数。
+	uint32_t completed_count = 0U;         ///< 该槽位发送完成的累计次数。
+	uint32_t received_count = 0U;          ///< 对应电机反馈帧的累计接收次数。
+	uint32_t coalesced_count = 0U;         ///< 新指令覆盖尚未发送旧指令的累计次数。
+	uint32_t max_rx_interval_us = 0U;      ///< 相邻反馈帧最大接收间隔，单位为微秒。
+	uint32_t last_rx_interval_us = 0U;     ///< 最近两帧反馈间隔；尚不足两帧时为 0。
+	uint32_t last_rx_uptime_ms = 0U;       ///< 最近一次反馈的单调时钟时间。
+	uint32_t tx_complete_to_rx_us = 0U;    ///< 成功批次完成到下一反馈的观测间隔，非匹配 RTT。
+	uint32_t response_sample_count = 0U;   ///< 上述观测有效样本数；0 表示尚未测得。
+	uint32_t last_response_uptime_ms = 0U; ///< 最近一次响应间隔样本的采集时间。
+	uint32_t tx_error_count = 0U;          ///< 本槽位入队失败、驱动提交失败及异步发送失败累计。
+	bool pending = false;                  ///< 槽位仍在排队或发送；为 false 时本槽位已空闲。
+	uint8_t last_dm_fault_code = 0U;       ///< 最近一次收到的8..E故障码；0=启动以来未收到。
+	uint16_t dm_fault_mask = 0U; ///< 启动以来故障码位图，bit n对应状态码n；正常帧不清除。
 };
+
+/** Optional diagnostic tap, invoked in a TX worker or interrupt context. Register before traffic;
+ * callbacks must not block, allocate, or call CAN submission APIs. */
+enum class CanTraceKind { kDriverSubmit, kTxComplete, kReceive, kHardwareStart };
+struct CanTraceEvent {
+	CanTraceKind kind;
+	CanTxSlot slot;
+	uint8_t bus;
+	uint16_t can_id;
+	uint8_t dlc;
+	uint8_t data[8];
+	uint32_t timestamp_us;
+};
+using CanTraceCallback = void (*)(const CanTraceEvent &, void *);
+void SetCanTraceCallback(CanTraceCallback callback, void *user_data);
+
+/** Operational receive subscription for gateways; ISR context, bounded/nonblocking.
+ * Register before InitializeCanDispatch. Covers every accepted standard CAN RX.
+ */
+struct CanReceiveFrame {
+	uint8_t bus, dlc;
+	uint16_t can_id;
+	uint8_t data[8];
+	uint32_t timestamp_us;
+};
+using CanReceiveCallback = void (*)(const CanReceiveFrame &, void *);
+void SetCanReceiveCallback(CanReceiveCallback callback, void *user_data);
 
 /** @brief CAN 异步发送队列的深度统计。 */
 struct CanTxQueueStats {
 	uint32_t current_depth = 0U; ///< 采样时发送队列中的帧数量。
-	uint32_t max_depth = 0U; ///< 自复位以来观测到的发送队列最大深度。
-	uint32_t capacity = 0U; ///< 发送队列可容纳的最大帧数量。
+	uint32_t max_depth = 0U;     ///< 自复位以来观测到的发送队列最大深度。
+	uint32_t capacity = 0U;      ///< 发送队列可容纳的最大帧数量。
 };
 
 /**
- * @brief 初始化 CAN 设备、接收过滤器和发送调度线程。
+ * @brief 初始化 CAN 设备、接收过滤器；默认创建发送线程。
+ * @param polling true 时由唯一主循环调用 PollCanDispatch，不创建发送线程。
  * @return 成功返回 0，参数无效或底层操作失败时返回负 errno 错误码。
  */
-int InitializeCanDispatch();
+int InitializeCanDispatch(bool polling = false, bool receive_all_standard = false);
+/** Single-owner mode: advance each bus without waiting; do not call with TX workers active. */
+void PollCanDispatch();
 /**
  * @brief 通知 CAN 调度线程存在待发送数据。
  */
@@ -70,8 +112,30 @@ void NotifyCanTxPending();
  * @param dlc CAN 数据长度码，本接口要求不超过 8。
  * @return 成功返回 0，参数无效或底层操作失败时返回负 errno 错误码。
  */
-int SubmitCanStandardFrame(CanTxSlot slot, uint8_t bus, uint16_t can_id,
-			   const uint8_t *data, uint8_t dlc);
+int SubmitCanStandardFrame(CanTxSlot slot, uint8_t bus, uint16_t can_id, const uint8_t *data,
+			   uint8_t dlc);
+/** One standard frame in a same-bus group. Payload is copied during submission. */
+struct CanStandardFrame {
+	CanTxSlot slot;
+	uint16_t can_id;
+	uint8_t dlc;
+	uint8_t data[8];
+};
+/** Publish 1..3 unique slots on one bus without worker preemption between frames.
+ * Thread context, uniprocessor only; interrupts stay enabled. The caller must own
+ * these slots. All inputs are validated before publication. A negative queue error
+ * may leave some frames published; this is not an atomic on-wire transaction.
+ * Existing in-flight slots still coalesce to their latest value and are counted.
+ */
+int SubmitCanStandardFrames(uint8_t bus, const CanStandardFrame *frames, size_t count);
+
+/** Successful driver submissions and hardware completions, indexed by batch size-1. */
+struct CanTxBatchStats {
+	uint32_t submitted[3]{};
+	uint32_t completed[3]{};
+};
+int ReadCanTxBatchStats(uint8_t bus, CanTxBatchStats *stats);
+
 /**
  * @brief 读取指定 CAN 总线的健康状态。
  * @param bus CAN 总线编号，从 0 开始。
@@ -108,4 +172,4 @@ void ResetCanRxIntervalStats();
  */
 void ResetCanTxDiagnosticStats();
 
-}  // namespace platform
+} // namespace platform

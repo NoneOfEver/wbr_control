@@ -16,6 +16,37 @@
 
 namespace protocols {
 
+// ERR nibble in feedback D[0], as specified by the motor feedback-frame table.
+enum class DmFaultCode : uint8_t {
+	kNone = 0,
+	kOverVoltage = 0x8,
+	kUnderVoltage = 0x9,
+	kOverCurrent = 0xA,
+	kMosOverTemperature = 0xB,
+	kWindingOverTemperature = 0xC,
+	kCommunicationLost = 0xD,
+	kOverload = 0xE,
+};
+
+constexpr bool IsDmFaultStatus(uint8_t status)
+{
+	return status >= 0x8U && status <= 0xEU;
+}
+
+constexpr DmFaultCode DmFeedbackFaultCode(uint8_t status)
+{
+	return IsDmFaultStatus(status) ? static_cast<DmFaultCode>(status) : DmFaultCode::kNone;
+}
+
+// Packed RX history: low nibble = last known fault, upper bits = all observed
+// fault-code bits. Normal/disabled frames do not erase it. Single RX writer
+// publishes this word atomically; readers cannot mix code and history samples.
+constexpr uint32_t UpdateDmFaultHistory(uint32_t history, uint8_t status)
+{
+	return IsDmFaultStatus(status)
+		? ((history | (1U << (status + 4U))) & ~0xFU) | status : history;
+}
+
 /** @brief 达妙电机 1 至 4 号反馈格式。 */
 struct DmMotorFeedback1To4 {
 	uint16_t encoder; ///< 电机编码器原始计数值。

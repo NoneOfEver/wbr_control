@@ -17,9 +17,6 @@
 
 #include <protocols/motors/dm_motor_protocol.h>
 
-/** @brief 摄氏温标转换为开尔文温标时使用的零点偏移。 */
-constexpr float kCelsiusToKelvin = 273.15f;
-
 namespace protocols {
 
 namespace {
@@ -57,8 +54,9 @@ int DecodeDmFeedbackNormal(const uint8_t *data, uint8_t dlc, DmMotorFeedbackNorm
 	out->angle = (static_cast<uint16_t>(data[1]) << 8) | data[2];
 	out->omega = (static_cast<uint16_t>(data[3]) << 4) | (data[4] >> 4);
 	out->torque = (static_cast<uint16_t>(data[4] & 0x0f) << 8) | data[5];
-	out->mos_temperature = data[6] + kCelsiusToKelvin;
-	out->rotor_temperature = data[7] + kCelsiusToKelvin;
+	// Feedback temperatures are already degrees Celsius.
+	out->mos_temperature = data[6];
+	out->rotor_temperature = data[7];
 
 	return 0;
 }

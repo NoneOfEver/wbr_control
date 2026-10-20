@@ -1,0 +1,65 @@
+schema_version: 1
+parameters:
+  schema_version:
+    cpp_name: kSchemaVersion
+    cpp_type: uint32_t
+  left_wheel.bus:
+    cpp_name: kLeftWheelBus
+    cpp_type: uint8_t
+  left_wheel.command_id:
+    cpp_name: kLeftWheelCommandId
+    cpp_type: uint16_t
+  left_wheel.feedback_id:
+    cpp_name: kLeftWheelFeedbackId
+    cpp_type: uint16_t
+  left_wheel.command_slot:
+    cpp_name: kLeftWheelCommandSlot
+    cpp_type: uint8_t
+  right_wheel.bus:
+    cpp_name: kRightWheelBus
+    cpp_type: uint8_t
+  right_wheel.command_id:
+    cpp_name: kRightWheelCommandId
+    cpp_type: uint16_t
+  right_wheel.feedback_id:
+    cpp_name: kRightWheelFeedbackId
+    cpp_type: uint16_t
+  right_wheel.command_slot:
+    cpp_name: kRightWheelCommandSlot
+    cpp_type: uint8_t
+  left_joint_b.bus:
+    cpp_name: kLeftJointBBus
+    cpp_type: uint8_t
+  left_joint_b.command_id:
+    cpp_name: kLeftJointBCommandId
+    cpp_type: uint16_t
+  left_joint_b.feedback_id:
+    cpp_name: kLeftJointBFeedbackId
+    cpp_type: uint16_t
+  left_joint_d.bus:
+    cpp_name: kLeftJointDBus
+    cpp_type: uint8_t
+  left_joint_d.command_id:
+    cpp_name: kLeftJointDCommandId
+    cpp_type: uint16_t
+  left_joint_d.feedback_id:
+    cpp_name: kLeftJointDFeedbackId
+    cpp_type: uint16_t
+  right_joint_b.bus:
+    cpp_name: kRightJointBBus
+    cpp_type: uint8_t
+  right_joint_b.command_id:
+    cpp_name: kRightJointBCommandId
+    cpp_type: uint16_t
+  right_joint_b.feedback_id:
+    cpp_name: kRightJointBFeedbackId
+    cpp_type: uint16_t
+  right_joint_d.bus:
+    cpp_name: kRightJointDBus
+    cpp_type: uint8_t
+  right_joint_d.command_id:
+    cpp_name: kRightJointDCommandId
+    cpp_type: uint16_t
+  right_joint_d.feedback_id:
+    cpp_name: kRightJointDFeedbackId
+    cpp_type: uint16_t

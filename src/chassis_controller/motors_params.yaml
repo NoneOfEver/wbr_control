@@ -1,0 +1,34 @@
+# Motor CAN wiring. Physical controllers/pins/bitrates remain in board DTS.
+schema_version: 1
+
+left_wheel:
+  bus: 3
+  command_id: 0x200
+  feedback_id: 0x201
+  command_slot: 0
+
+right_wheel:
+  bus: 2
+  command_id: 0x200
+  feedback_id: 0x201
+  command_slot: 0
+
+left_joint_b:
+  bus: 3
+  command_id: 0x000
+  feedback_id: 0x010
+
+left_joint_d:
+  bus: 3
+  command_id: 0x003
+  feedback_id: 0x013
+
+right_joint_b:
+  bus: 2
+  command_id: 0x001
+  feedback_id: 0x011
+
+right_joint_d:
+  bus: 2
+  command_id: 0x002
+  feedback_id: 0x012

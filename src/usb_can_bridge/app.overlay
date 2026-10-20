@@ -1,0 +1,1 @@
+&cherryusb_usb0 { status = "okay"; };

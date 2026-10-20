@@ -1,0 +1,11 @@
+source "Kconfig.zephyr"
+
+config WBR_CONTROL_ONBOARD_IMU_RAW
+    bool "Acquire raw onboard IMU bursts without a controller or AHRS"
+    default y
+
+config WBR_CONTROL_ONBOARD_IMU_SPI_FREQUENCY_HZ
+    int "Onboard IMU SPI frequency"
+    default 8000000
+    range 100000 24000000
+    depends on WBR_CONTROL_ONBOARD_IMU_RAW

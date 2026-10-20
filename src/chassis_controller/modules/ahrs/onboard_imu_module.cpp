@@ -17,7 +17,7 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/timing/timing.h>
 
-#if defined(CONFIG_WBR_CONTROL_MODULE_AHRS)
+#if defined(CONFIG_WBR_CONTROL_MODULE_AHRS) || defined(CONFIG_WBR_CONTROL_ONBOARD_IMU_RAW)
 
 #define ONBOARD_IMU_SPI_NODE DT_CHOSEN(wbr_control_onboard_imu_spi)
 #define ONBOARD_IMU_CS_NODE DT_ALIAS(onboard_imu_cs)

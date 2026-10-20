@@ -59,11 +59,24 @@ constexpr uint8_t kVendorInEp = 0x81U;
 constexpr uint8_t kVendorOutEp = 0x01U;
 constexpr uint8_t kVendorInterface = 0x00U;
 constexpr uint16_t kVendorPacketSize = 64U;
+// Bulk is opt-in for the bridge A/B test; production remains Interrupt.
+#if defined(WBR_USB_BULK_TRANSPORT)
+constexpr uint8_t kVendorEndpointType = USB_ENDPOINT_TYPE_BULK;
+constexpr uint16_t kVendorHsMaxPacketSize = 512U;
+constexpr uint8_t kVendorIntervalFs = 0U;
+constexpr uint8_t kVendorIntervalHs = 0U;
+#else
+constexpr uint8_t kVendorEndpointType = USB_ENDPOINT_TYPE_INTERRUPT;
+constexpr uint16_t kVendorHsMaxPacketSize = kVendorPacketSize;
 constexpr uint8_t kVendorIntervalFs = 0x01U; /* 1 frame = 1 ms */
 #if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
 constexpr uint8_t kVendorIntervalHs = CONFIG_WBR_CONTROL_USB_MPC_HS_INTERVAL;
+#elif defined(CONFIG_WBR_CONTROL_USB_HS_INTERVAL)
+constexpr uint8_t kVendorIntervalHs = CONFIG_WBR_CONTROL_USB_HS_INTERVAL;
 #else
 constexpr uint8_t kVendorIntervalHs = 0x04U; /* 8 microframes = 1 ms */
+#endif
+
 #endif
 
 #define WBR_CONTROL_VENDOR_INTERRUPT_DESCRIPTOR_LEN (9 + 7 + 7)
@@ -75,13 +88,40 @@ static_assert(protocols::kPcCommSendPacketSize <= kVendorPacketSize,
 	      "PC telemetry must fit one Vendor Interrupt IN packet");
 
 USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX
-uint8_t g_vendor_read_buffer[kVendorPacketSize];
+uint8_t g_vendor_read_buffer[
+#if defined(WBR_USB_RAW_OUT_BYTES)
+    WBR_USB_RAW_OUT_BYTES
+#elif defined(WBR_USB_MERGED_CAN_TEST)
+    128
+#else
+    kVendorPacketSize
+#endif
+];
 USB_NOCACHE_RAM_SECTION USB_MEM_ALIGNX uint8_t g_vendor_tx_buffer[kVendorPacketSize];
 
 volatile bool g_started = false;
 volatile bool g_configured = false;
 volatile bool g_vendor_tx_busy = false;
 volatile bool g_vendor_out_armed = false;
+
+K_SEM_DEFINE(g_usb_tx_complete, 0, 1);
+atomic_t g_usb_received_packets;
+atomic_t g_usb_submitted_packets;
+atomic_t g_usb_completed_packets;
+atomic_t g_usb_receive_queue_drops;
+atomic_t g_usb_endpoint_errors;
+atomic_t g_usb_last_receive_us;
+atomic_t g_usb_last_complete_us;
+
+// With no application protocol selected, provide the same raw transport API
+// used by ReceiveUsb/SendUsb. Rearm OUT in thread context, after the ISR retires
+// its qTD; applications must not own descriptors, callbacks, or DMA buffers.
+#if !defined(CONFIG_WBR_CONTROL_PC_LINK) && !defined(CONFIG_WBR_CONTROL_USB_MPC)
+#define WBR_USB_RAW_TRANSPORT 1
+K_SEM_DEFINE(g_raw_rx_kick, 0, 1);
+K_THREAD_STACK_DEFINE(g_raw_rx_stack, 1024);
+k_thread g_raw_rx_thread;
+#endif
 
 #if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 K_SEM_DEFINE(g_pc_link_tx_kick, 0, 1);
@@ -113,10 +153,10 @@ static const uint8_t g_config_descriptor_hs[] = {
 		USBD_MAX_POWER),
 	USB_INTERFACE_DESCRIPTOR_INIT(kVendorInterface, 0x00, 0x02,
 		USB_DEVICE_CLASS_VEND_SPECIFIC, 0x00, 0x00, 0x00),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, USB_ENDPOINT_TYPE_INTERRUPT,
-		kVendorPacketSize, kVendorIntervalHs),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, USB_ENDPOINT_TYPE_INTERRUPT,
-		kVendorPacketSize, kVendorIntervalHs),
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, kVendorEndpointType,
+		kVendorHsMaxPacketSize, kVendorIntervalHs),
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, kVendorEndpointType,
+		kVendorHsMaxPacketSize, kVendorIntervalHs),
 };
 
 static const uint8_t g_config_descriptor_fs[] = {
@@ -128,9 +168,9 @@ static const uint8_t g_config_descriptor_fs[] = {
 		USBD_MAX_POWER),
 	USB_INTERFACE_DESCRIPTOR_INIT(kVendorInterface, 0x00, 0x02,
 		USB_DEVICE_CLASS_VEND_SPECIFIC, 0x00, 0x00, 0x00),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, USB_ENDPOINT_TYPE_INTERRUPT,
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, kVendorEndpointType,
 		kVendorPacketSize, kVendorIntervalFs),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, USB_ENDPOINT_TYPE_INTERRUPT,
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, kVendorEndpointType,
 		kVendorPacketSize, kVendorIntervalFs),
 };
 
@@ -147,9 +187,9 @@ static const uint8_t g_other_speed_config_descriptor_hs[] = {
 		USBD_MAX_POWER),
 	USB_INTERFACE_DESCRIPTOR_INIT(kVendorInterface, 0x00, 0x02,
 		USB_DEVICE_CLASS_VEND_SPECIFIC, 0x00, 0x00, 0x00),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, USB_ENDPOINT_TYPE_INTERRUPT,
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, kVendorEndpointType,
 		kVendorPacketSize, kVendorIntervalFs),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, USB_ENDPOINT_TYPE_INTERRUPT,
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, kVendorEndpointType,
 		kVendorPacketSize, kVendorIntervalFs),
 };
 
@@ -162,10 +202,10 @@ static const uint8_t g_other_speed_config_descriptor_fs[] = {
 		USBD_MAX_POWER),
 	USB_INTERFACE_DESCRIPTOR_INIT(kVendorInterface, 0x00, 0x02,
 		USB_DEVICE_CLASS_VEND_SPECIFIC, 0x00, 0x00, 0x00),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, USB_ENDPOINT_TYPE_INTERRUPT,
-		kVendorPacketSize, kVendorIntervalHs),
-	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, USB_ENDPOINT_TYPE_INTERRUPT,
-		kVendorPacketSize, kVendorIntervalHs),
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorOutEp, kVendorEndpointType,
+		kVendorHsMaxPacketSize, kVendorIntervalHs),
+	USB_ENDPOINT_DESCRIPTOR_INIT(kVendorInEp, kVendorEndpointType,
+		kVendorHsMaxPacketSize, kVendorIntervalHs),
 };
 
 static const char *g_string_descriptors[] = {
@@ -238,13 +278,16 @@ int ArmVendorOut()
 		return 0;
 	}
 
+	// Publish ownership before priming: a fast host can complete the transfer
+	// before start_read returns. The callback must be able to clear this flag.
+	g_vendor_out_armed = true;
 	const int rc = usbd_ep_start_read(
 		kBusId, kVendorOutEp, g_vendor_read_buffer, sizeof(g_vendor_read_buffer));
 	if (rc < 0) {
+		g_vendor_out_armed = false;
+		atomic_inc(&g_usb_endpoint_errors);
 		return rc;
 	}
-
-	g_vendor_out_armed = true;
 	return 0;
 }
 
@@ -257,6 +300,9 @@ void UsbEventHandler(uint8_t busid, uint8_t event)
 		g_configured = true;
 		g_vendor_tx_busy = false;
 		g_vendor_out_armed = false;
+	#if defined(WBR_USB_RAW_TRANSPORT)
+		k_sem_give(&g_raw_rx_kick);
+	#endif
 	#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 		g_pc_command_clear_requested = true;
 		k_sem_give(&g_pc_link_tx_kick);
@@ -271,6 +317,9 @@ void UsbEventHandler(uint8_t busid, uint8_t event)
 		g_configured = false;
 		g_vendor_tx_busy = false;
 		g_vendor_out_armed = false;
+	#if defined(WBR_USB_RAW_TRANSPORT)
+		k_sem_give(&g_raw_rx_kick);
+	#endif
 	#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 		g_pc_command_clear_requested = true;
 	#endif
@@ -282,6 +331,9 @@ void UsbEventHandler(uint8_t busid, uint8_t event)
 		g_configured = false;
 		g_vendor_tx_busy = false;
 		g_vendor_out_armed = false;
+	#if defined(WBR_USB_RAW_TRANSPORT)
+		k_sem_give(&g_raw_rx_kick);
+	#endif
 	#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 		g_pc_command_clear_requested = true;
 	#endif
@@ -294,7 +346,7 @@ void UsbEventHandler(uint8_t busid, uint8_t event)
 	}
 }
 
-#if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
+#if !defined(CONFIG_WBR_CONTROL_USB_MPC)
 void EnqueueUsbRx(const uint8_t *data, size_t len)
 {
 	const size_t copy_len = MIN(len, msg::kUsbRawChunkSize);
@@ -303,9 +355,12 @@ void EnqueueUsbRx(const uint8_t *data, size_t len)
 	}
 
 	msg::UsbRawFrameMessage frame = {};
+	frame.receive_timestamp_us = static_cast<uint32_t>(atomic_get(&g_usb_last_receive_us));
 	frame.len = static_cast<uint16_t>(copy_len);
 	memcpy(frame.data, data, copy_len);
-	(void)msg::usb_raw_frames.TryPush(frame);
+	if (msg::usb_raw_frames.TryPush(frame) != 0) {
+		atomic_inc(&g_usb_receive_queue_drops);
+	}
 }
 #endif
 
@@ -314,15 +369,20 @@ void UsbInterruptOutCallback(uint8_t busid, uint8_t ep, uint32_t nbytes)
 	ARG_UNUSED(busid);
 
 	g_vendor_out_armed = false;
+	atomic_inc(&g_usb_received_packets);
+	atomic_set(&g_usb_last_receive_us, k_cyc_to_us_floor64(k_cycle_get_64()));
 	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
 	g_mpc_rx_len = static_cast<uint16_t>(MIN(static_cast<size_t>(nbytes),
 						    sizeof(g_vendor_read_buffer)));
 	atomic_inc(&g_mpc_out_callbacks);
 	atomic_set(&g_mpc_last_out_bytes, nbytes);
 	k_sem_give(&g_mpc_rx_kick);
-	#elif defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
+	#else
 	EnqueueUsbRx(g_vendor_read_buffer, MIN(static_cast<size_t>(nbytes),
 					       sizeof(g_vendor_read_buffer)));
+	#endif
+	#if defined(WBR_USB_RAW_TRANSPORT)
+	k_sem_give(&g_raw_rx_kick);
 	#endif
 
 	/*
@@ -342,6 +402,9 @@ void UsbInterruptInCallback(uint8_t busid, uint8_t ep, uint32_t nbytes)
 	ARG_UNUSED(ep);
 	ARG_UNUSED(nbytes);
 	g_vendor_tx_busy = false;
+	atomic_inc(&g_usb_completed_packets);
+	atomic_set(&g_usb_last_complete_us, k_cyc_to_us_floor64(k_cycle_get_64()));
+	k_sem_give(&g_usb_tx_complete);
 	#if defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC
 	atomic_inc(&g_mpc_in_callbacks);
 	atomic_set(&g_mpc_last_in_bytes, nbytes);
@@ -362,6 +425,20 @@ struct usbd_endpoint g_vendor_in_ep = {
 };
 
 static struct usbd_interface g_vendor_intf;
+
+#if defined(WBR_USB_RAW_TRANSPORT)
+void RawUsbReceiveLoop(void *, void *, void *)
+{
+	for (;;) {
+		(void)k_sem_take(&g_raw_rx_kick, K_FOREVER);
+		if (ArmVendorOut() < 0) {
+			// Retry a transient endpoint submission failure without spinning.
+			k_sleep(K_MSEC(1));
+			k_sem_give(&g_raw_rx_kick);
+		}
+	}
+}
+#endif
 
 #if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 constexpr uint32_t kPcLinkPeriodMs = CONFIG_WBR_CONTROL_PC_LINK_PERIOD_MS;
@@ -821,9 +898,14 @@ int StartUsbMpcWorker()
 
 namespace platform {
 
-int InitializeUsbSession()
+int InitializeUsbSession(bool polling)
 {
-#if defined(CONFIG_CHERRYUSB) && CONFIG_CHERRYUSB && defined(CONFIG_CHERRYUSB_DEVICE) && \
+#if (defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK) ||                         \
+	(defined(CONFIG_WBR_CONTROL_USB_MPC) && CONFIG_WBR_CONTROL_USB_MPC)
+	if (polling)
+		return -ENOTSUP;
+#endif
+#if defined(CONFIG_CHERRYUSB) && CONFIG_CHERRYUSB && defined(CONFIG_CHERRYUSB_DEVICE) &&           \
 	CONFIG_CHERRYUSB_DEVICE
 	if (g_started) {
 		return 0;
@@ -844,6 +926,16 @@ int InitializeUsbSession()
 	}
 
 	g_started = true;
+
+#if defined(WBR_USB_RAW_TRANSPORT)
+	if (!polling)
+		k_thread_create(&g_raw_rx_thread, g_raw_rx_stack,
+				K_THREAD_STACK_SIZEOF(g_raw_rx_stack), RawUsbReceiveLoop, nullptr,
+				nullptr, nullptr, modules::scheduling::thread_priority::kPcLink, 0,
+				K_NO_WAIT);
+	if (!polling)
+		(void)k_thread_name_set(&g_raw_rx_thread, "usb_raw_rx");
+#endif
 
 #if defined(CONFIG_WBR_CONTROL_PC_LINK) && CONFIG_WBR_CONTROL_PC_LINK
 	{
@@ -866,6 +958,31 @@ int InitializeUsbSession()
 	return 0;
 #else
 	return -ENOTSUP;
+#endif
+}
+
+void ReadUsbSessionStats(UsbSessionStats *stats)
+{
+	if (stats == nullptr) {
+		return;
+	}
+	*stats = {};
+#if defined(CONFIG_CHERRYUSB) && defined(CONFIG_CHERRYUSB_DEVICE)
+	stats->received_packets = atomic_get(&g_usb_received_packets);
+	stats->submitted_packets = atomic_get(&g_usb_submitted_packets);
+	stats->completed_packets = atomic_get(&g_usb_completed_packets);
+	stats->receive_queue_drops = atomic_get(&g_usb_receive_queue_drops);
+	stats->endpoint_errors = atomic_get(&g_usb_endpoint_errors);
+	stats->last_receive_us = atomic_get(&g_usb_last_receive_us);
+	stats->last_complete_us = atomic_get(&g_usb_last_complete_us);
+#endif
+}
+
+void PollUsbSession()
+{
+#if defined(WBR_USB_RAW_TRANSPORT)
+	if (g_started)
+		(void)ArmVendorOut();
 #endif
 }
 
@@ -899,6 +1016,7 @@ int SendUsb(const uint8_t *data, size_t len)
 		return -EBUSY;
 	}
 
+	k_sem_reset(&g_usb_tx_complete);
 	memcpy(g_vendor_tx_buffer, data, len);
 	g_vendor_tx_busy = true;
 
@@ -906,8 +1024,10 @@ int SendUsb(const uint8_t *data, size_t len)
 		kBusId, kVendorInEp, g_vendor_tx_buffer, static_cast<uint32_t>(len));
 	if (rc < 0) {
 		g_vendor_tx_busy = false;
+		atomic_inc(&g_usb_endpoint_errors);
 		return rc;
 	}
+	atomic_inc(&g_usb_submitted_packets);
 
 	return static_cast<int>(len);
 #else
@@ -917,13 +1037,28 @@ int SendUsb(const uint8_t *data, size_t len)
 #endif
 }
 
-int ReceiveUsb(uint8_t *out, size_t capacity, size_t *out_len, int32_t timeout_ms)
+int WaitUsbTxComplete(int32_t timeout_ms)
+{
+#if defined(CONFIG_CHERRYUSB) && defined(CONFIG_CHERRYUSB_DEVICE)
+	const k_timeout_t timeout = timeout_ms < 0 ? K_FOREVER : K_MSEC(timeout_ms);
+	return k_sem_take(&g_usb_tx_complete, timeout);
+#else
+	ARG_UNUSED(timeout_ms);
+	return -ENOTSUP;
+#endif
+}
+
+int ReceiveUsb(uint8_t *out, size_t capacity, size_t *out_len, int32_t timeout_ms,
+	       uint32_t *receive_timestamp_us)
 {
 	if ((out == nullptr) || (out_len == nullptr) || (capacity == 0U)) {
 		return -EINVAL;
 	}
 
 	*out_len = 0U;
+	if (receive_timestamp_us != nullptr) {
+		*receive_timestamp_us = 0;
+	}
 
 #if defined(CONFIG_CHERRYUSB) && CONFIG_CHERRYUSB && defined(CONFIG_CHERRYUSB_DEVICE) && \
 	CONFIG_CHERRYUSB_DEVICE
@@ -935,6 +1070,9 @@ int ReceiveUsb(uint8_t *out, size_t capacity, size_t *out_len, int32_t timeout_m
 		return rc;
 	}
 
+	if (receive_timestamp_us != nullptr) {
+		*receive_timestamp_us = chunk.receive_timestamp_us;
+	}
 	const size_t copy_len = MIN(capacity, static_cast<size_t>(chunk.len));
 	memcpy(out, chunk.data, copy_len);
 	*out_len = copy_len;
