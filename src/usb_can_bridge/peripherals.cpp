@@ -11,6 +11,9 @@
 #include <algorithm>
 #include <cstring>
 
+#ifdef CONFIG_WBR_UART10_PLIC_PROBE
+extern "C" uint32_t wbr_uart_rx_probe_version(void);
+#endif
 namespace
 {
 namespace wire = wbr::bridge;
@@ -49,6 +52,9 @@ struct UartProbe {
 	uint32_t irq_count = 0, ready_count = 0, partial_count = 0;
 	uint32_t full_count = 0, bytes = 0, max_gap_us = 0, last_us = 0, last_length = 0;
 	bool seen = false;
+	uint32_t rx_available = 0, rx_timeout = 0, other_irq = 0, last_irq = 0;
+	uint32_t timeout_flush = 0, zero_flush = 0, status_errors = 0;
+	uint32_t total = 0, offset = 0, pending = 0, added = 0;
 } probe;
 void ProbeIrq(const device *, void *) { ++probe.irq_count; }
 #endif
@@ -172,16 +178,19 @@ void AppendUartProbeStatus(wire::Packet &packet)
 {
 #ifdef CONFIG_WBR_UART10_PLIC_PROBE
 	const unsigned key = irq_lock();
-	wire::Put32(packet.data() + 28, 0x32545255); // URT2: identifies this diagnostic image
-	const uint32_t flags = 1U | (irq_is_enabled(DT_IRQN(DT_CHOSEN(wbr_control_remote_input_uart))) ? 2U : 0U);
+	wire::Put32(packet.data() + 28, wbr_uart_rx_probe_version()); // URT3: driver-path instrumentation
+	const uint32_t flags = 1U |
+		(irq_is_enabled(DT_IRQN(DT_CHOSEN(wbr_control_remote_input_uart))) ? 2U : 0U) |
+		(probe.added > 65535U ? 4U : 0U) |
+		((probe.last_irq & 0xffU) << 8) | (std::min(probe.status_errors, 65535U) << 16);
 	wire::Put32(packet.data() + 32, flags);
-	wire::Put32(packet.data() + 36, probe.irq_count);
-	wire::Put32(packet.data() + 40, probe.ready_count);
-	wire::Put32(packet.data() + 44, probe.partial_count);
-	wire::Put32(packet.data() + 48, probe.full_count);
-	wire::Put32(packet.data() + 52, probe.bytes);
-	wire::Put32(packet.data() + 56, probe.max_gap_us);
-	wire::Put32(packet.data() + 60, probe.last_length);
+	wire::Put32(packet.data() + 36, probe.rx_available);
+	wire::Put32(packet.data() + 40, probe.rx_timeout);
+	wire::Put32(packet.data() + 44, probe.other_irq);
+	wire::Put32(packet.data() + 48, probe.timeout_flush);
+	wire::Put32(packet.data() + 52, probe.zero_flush);
+	wire::Put32(packet.data() + 56, (probe.total & 0xffffU) | ((probe.offset & 0xffffU) << 16));
+	wire::Put32(packet.data() + 60, (probe.pending & 0xffffU) | ((probe.added & 0xffffU) << 16));
 	irq_unlock(key);
 #else
 	(void)packet;
@@ -218,3 +227,28 @@ uint32_t StartPeripherals()
 	return capabilities;
 }
 } // namespace gateway
+
+#ifdef CONFIG_WBR_UART10_PLIC_PROBE
+// Called at the driver's existing IIR read and timeout-only flush points.
+// Event numbers are documented with diagnostics/hpm_uart_rx_probe.patch.
+extern "C" void wbr_uart_rx_probe(const device *dev, uint32_t event,
+                                  uint32_t a, uint32_t b, uint32_t c)
+{
+	if (dev != remote.dev) return;
+	switch (event) {
+	case 1:
+		probe.last_irq = a;
+		if (a == 0x4) ++probe.rx_available;
+		else if (a == 0xc) ++probe.rx_timeout;
+		else ++probe.other_irq;
+		break;
+	case 2: ++probe.timeout_flush; break;
+	case 3: probe.total = a; probe.offset = b; probe.pending = c; break;
+	case 4:
+		if (b) ++probe.status_errors;
+		else { probe.added = a; if (!a) ++probe.zero_flush; }
+		break;
+	default: break;
+	}
+}
+#endif

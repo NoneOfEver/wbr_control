@@ -118,3 +118,49 @@ interrupt delivery/peripheral conditions; ISR increment + full-only RX_RDY
 points to source identification/partial-DMA flush. Partial RX_RDY with continued
 host grouping moves investigation to publication/queue timing. These are
 branching observations, not asserted outcomes.
+
+## URT3: classify the driver path
+
+The confirmed URT2 capture had ISR +8434, RX_RDY +824, partial +0,
+full128 +824. This establishes IRQ delivery but not timeout delivery.
+URT3 observes the driver's existing IIR read (no second register read) and
+instruments only the timeout-driven DMA flush, keeping reception unchanged.
+
+The local HPM UART driver patch is packaged at
+`diagnostics/hpm_uart_rx_probe.patch`. It is separate from unrelated HPM CAN
+changes and is not pushed to the upstream module repository. On a fresh module
+checkout, from the Zephyr workspace apply it once before building the probe:
+
+```bash
+git -C hpm_support apply --check ../wbr_control/src/usb_can_bridge/diagnostics/hpm_uart_rx_probe.patch
+git -C hpm_support apply ../wbr_control/src/usb_can_bridge/diagnostics/hpm_uart_rx_probe.patch
+```
+
+Already patched: `git -C hpm_support apply --reverse --check PATH_TO_PATCH`
+will succeed instead. Do not apply twice. The local Mac tree is already patched.
+Normal builds compile out the hooks. The probe requires the driver's version
+function, so a missing driver patch causes a link error rather than a false
+URT3 marker with empty counters.
+
+Driver hook events: 1 = IIR ID; 2 = entry into timeout flush;
+3 = DMA total, previously published offset, and pending length after successful
+`dma_get_status`; 4 = calculated new length and DMA status return code.
+The application filters these events to UART10. Snapshot fields are:
+
+- `irq_rx_available`, `irq_timeout`, `irq_other`: source counts; `last_irq_id`
+  is the last observed ID, in decimal (4 = RX available, 12 = timeout).
+- `timeout_flush`, `zero_flush`, `dma_status_errors`: timeout path entry,
+  successful status with zero new bytes, and failed DMA status calls.
+- `last_total`, `last_offset`, `last_pending`, `last_added`: most recent
+  timeout-flush values, not a histogram. Before any such flush these are zero;
+  after a status failure the last successful lengths remain. Values pack into
+  16-bit fields, sufficient for this unchanged 128-byte buffer. Flags bit 2
+  reports an oversized calculated length; it must not be interpreted as valid.
+
+Marker is now URT3. The host still decodes URT2 with its old field meanings.
+Run with `--probe-status` and use a new CSV name such as `uart_probe_v3.csv`.
+Compare before/after counters: timeout zero means no timeout identified; timeout
+nonzero but flush unchanged suggests the circular-mode skip; flush increases
+with zero/status errors explains lack of new publication. A positive new-byte
+count requires checking downstream RX_RDY and host data. Counts include short
+stop/handshake intervals outside capture, as in URT2.

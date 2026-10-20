@@ -1,0 +1,97 @@
+diff --git a/drivers/serial/uart_hpmicro.c b/drivers/serial/uart_hpmicro.c
+index 257ed1b..038bd90 100644
+--- a/drivers/serial/uart_hpmicro.c
++++ b/drivers/serial/uart_hpmicro.c
+@@ -22,6 +22,15 @@
+ #include <zephyr/logging/log.h>
+ #include <drivers/uart_hpmicro.h>
+ LOG_MODULE_REGISTER(uart_hpmicro);
++#ifdef CONFIG_WBR_UART10_PLIC_PROBE
++/* Optional application-owned probe. Never read IIR a second time for tracing. */
++uint32_t wbr_uart_rx_probe_version(void) { return 0x33545255U; }
++extern void wbr_uart_rx_probe(const struct device *dev, uint32_t event,
++                             uint32_t a, uint32_t b, uint32_t c);
++#define UART_RX_PROBE(dev, event, a, b, c) wbr_uart_rx_probe(dev, event, a, b, c)
++#else
++#define UART_RX_PROBE(dev, event, a, b, c) do { } while (0)
++#endif
+ #ifdef CONFIG_UART_ASYNC_API
+ 
+ typedef struct uart_info {
+@@ -101,7 +110,7 @@ struct uart_hpm_data {
+ };
+ 
+ #ifdef CONFIG_UART_ASYNC_API
+-static void uart_hpm_async_rx_flush(const struct device *dev);
++static void uart_hpm_async_rx_flush(const struct device *dev, bool timeout_flush);
+ static void uart_hpm_handle_rx_timeout(const struct device *dev);
+ static void uart_hpm_dma_callback(const struct device *dev, void *arg,
+ 				  uint32_t channel, int status);
+@@ -475,6 +484,7 @@ __attribute__((section(".isr"))) static void uart_hpm_isr(const struct device *d
+ #ifdef CONFIG_UART_ASYNC_API
+ 	const struct uart_hpm_cfg *const cfg = dev->config;
+ 	const uint8_t irq_id = uart_get_irq_id(cfg->base);
++	UART_RX_PROBE(dev, 1, irq_id, 0, 0);
+ 	if (cfg->async_capable && (irq_id == uart_intr_id_rx_timeout)) {
+ 		/*
+ 		 * 路径一：UART RX timeout，DMA buffer 尚未收满。
+@@ -577,7 +587,7 @@ static void async_evt_rx_buf_release(const struct device *dev)
+ 	async_user_callback(dev, &evt);
+ }
+ 
+-static void uart_hpm_async_rx_flush(const struct device *dev)
++static void uart_hpm_async_rx_flush(const struct device *dev, bool timeout_flush)
+ {
+ 	struct uart_hpm_data *data = dev->data;
+ 	size_t rx_rcv_len;
+@@ -588,8 +598,13 @@ static void uart_hpm_async_rx_flush(const struct device *dev)
+ 	if (ret) {
+ 		LOG_ERR("ERR dma get status.\r\n");
+ 		data->dma_rxinfo.current_size = 0U;
++		if (timeout_flush) UART_RX_PROBE(dev, 4, 0, ret, 0);
+ 		return;
+ 	}
++	if (timeout_flush) {
++		UART_RX_PROBE(dev, 3, data->dma_rxinfo.current_total_size,
++		              data->dma_rxinfo.current_offset, stat.pending_length);
++	}
+ 	/*
+ 	 * DMA pending_length 表示本次 96 字节传输还剩多少字节未搬运。
+ 	 * 已搬总数 = total - pending；再减去之前已通过 UART_RX_RDY 发布的
+@@ -599,6 +614,7 @@ static void uart_hpm_async_rx_flush(const struct device *dev)
+ 	rx_rcv_len = data->dma_rxinfo.current_total_size - 
+ 				 data->dma_rxinfo.current_offset - 
+ 				 stat.pending_length;
++	if (timeout_flush) UART_RX_PROBE(dev, 4, rx_rcv_len, 0, 0);
+ 	if (rx_rcv_len > 0) {
+ 		data->dma_rxinfo.current_size = rx_rcv_len;
+ 		async_evt_rx_rdy(dev);
+@@ -641,7 +657,7 @@ static int uart_hpm_rx_disable(const struct device *dev)
+ 	uart_disable_irq(config->base, uart_intr_rx_data_avail_or_timeout);
+ 	
+ 	dma_suspend(data->dma_rx.dma_dev, data->dma_rx.channel);
+-	uart_hpm_async_rx_flush(dev);
++	uart_hpm_async_rx_flush(dev, false);
+ 	async_evt_rx_buf_release(dev);
+ 
+ 		/* disable dma channel */
+@@ -700,8 +716,9 @@ static void uart_hpm_handle_rx_timeout(const struct device *dev)
+ 	struct uart_hpm_data *data = dev->data;
+ 
+ 	/* 冻结 DMA 计数，发布已经到达 current buffer 的新字节，再继续接收。 */
++	UART_RX_PROBE(dev, 2, 0, 0, 0);
+ 	dma_suspend(data->dma_rx.dma_dev, data->dma_rx.channel);
+-	uart_hpm_async_rx_flush(dev);
++	uart_hpm_async_rx_flush(dev, true);
+ 	dma_resume(data->dma_rx.dma_dev, data->dma_rx.channel);
+ }
+ 
+@@ -987,7 +1004,7 @@ static void uart_hpm_dma_callback(const struct device *dev, void *arg, uint32_t
+ 			 * 先 flush 尚未发布的尾部并同步产生 UART_RX_RDY，再通知旧 buffer
+ 			 * released，最后切换到 next buffer 并重新启动 DMA。
+ 			 */
+-			uart_hpm_async_rx_flush(data->dma_rxinfo.dev);
++			uart_hpm_async_rx_flush(data->dma_rxinfo.dev, false);
+ 			if (data->dma_rxinfo.current_size > 0) {
+ 				async_evt_rx_buf_release(data->dma_rxinfo.dev);
+ 			}
