@@ -57,3 +57,7 @@ sensor messages because freshness is a control input requirement.
 Compilation and native protocol tests have passed; physical acquisition, board
 capabilities, host/MCU reconnection and real control behavior remain to be tested
 when NUC and the robot are available. Default host operation keeps outputs disabled.
+
+UART10's receive batching is under controlled investigation. See
+[the evidence and opt-in PLIC A/B experiment](UART10_INVESTIGATION.md).
+The probe remains disabled in the normal build pending hardware confirmation.

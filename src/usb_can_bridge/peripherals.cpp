@@ -7,6 +7,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
+#include <zephyr/irq.h>
 #include <algorithm>
 #include <cstring>
 
@@ -149,8 +150,15 @@ namespace gateway
 uint32_t StartPeripherals()
 {
 	uint32_t capabilities = 0;
-	if (StartAsync(remote))
+	if (StartAsync(remote)) {
 		capabilities |= 2;
+#ifdef CONFIG_WBR_UART10_PLIC_PROBE
+		// A/B probe only: the HPM async init leaves this PLIC source masked,
+		// while uart_rx_enable() enables only the UART peripheral IRQ. Keep
+		// DMA buffers and timeout handling unchanged to isolate this gate.
+		irq_enable(DT_IRQN(DT_CHOSEN(wbr_control_remote_input_uart)));
+#endif
+	}
 	if (device_is_ready(hi91.dev) &&
 	    uart_hpm_rx_circular_enable(hi91.dev, hi91_ring, kRingBytes) == 0) {
 		capabilities |= 4;

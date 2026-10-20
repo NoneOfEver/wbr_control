@@ -9,3 +9,12 @@ config WBR_CONTROL_ONBOARD_IMU_SPI_FREQUENCY_HZ
     default 8000000
     range 100000 24000000
     depends on WBR_CONTROL_ONBOARD_IMU_RAW
+
+config WBR_UART10_PLIC_PROBE
+    bool "Investigation only: unmask remote UART PLIC after async RX start"
+    default n
+    depends on UART_INTERRUPT_DRIVEN && UART_ASYNC_API
+    help
+      Enables only the remote UART interrupt-controller source. The baseline
+      leaves this off. Build separate baseline/probe images and compare UART
+      capture CSVs without changing DMA buffer size or USB forwarding policy.
