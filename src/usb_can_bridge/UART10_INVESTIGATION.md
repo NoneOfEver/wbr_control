@@ -1,3 +1,5 @@
+> Historical investigation: the probes and diagnostic pages below were removed on 2026-10-22. UART10 line-idle is now production-default; use README.md and patches/hpm_uart_line_idle.patch, not the old probe configuration.
+
 # UART10 receive batching investigation — 2026-10-21
 
 **Current result:** the opt-in `CONFIG_WBR_UART10_LINE_IDLE` candidate uses the

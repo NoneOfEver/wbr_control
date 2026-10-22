@@ -54,16 +54,27 @@ No per-cycle ACK, stress command, profiling query, timestamp export, VOFA,
 printk or logging backend is enabled. Small acquisition timestamps remain in
 sensor messages because freshness is a control input requirement.
 
-Compilation and native protocol tests have passed; physical acquisition, board
-capabilities, host/MCU reconnection and real control behavior remain to be tested
-when NUC and the robot are available. Default host operation keeps outputs disabled.
+## Production UART10 driver dependency
 
-UART10's receive batching is under controlled investigation. See
-[the evidence and opt-in PLIC A/B experiment](UART10_INVESTIGATION.md).
-The probe remains disabled in the normal build pending hardware confirmation.
+UART10 line-idle reception is now a default production function. It preserves
+128-byte DMA double buffers, non-cacheable memory and the independent 1000-us
+RX-edge idle detector. Do not disable it as part of removing diagnostics.
 
-`CONFIG_WBR_GATEWAY_FAULT_DIAGNOSTICS` adds a default-off FLT1 Hello page for
-stop-only process exit/kill/freeze testing. The snapshot is taken before that
-Hello resets the old session. It records stop CAN group submission, not hardware
-completion or physical motor stop. See the matching companion repository's
-`chassis_controller/measurements/fault_recovery/README.md` for the test sequence.
+The matching HPM UART changes are preserved as
+`patches/hpm_uart_line_idle.patch`. From the Zephyr workspace, apply only to a
+clean UART driver that does not already contain these changes:
+
+```bash
+git -C hpm_support apply --check ../wbr_control/src/usb_can_bridge/patches/hpm_uart_line_idle.patch
+git -C hpm_support apply ../wbr_control/src/usb_can_bridge/patches/hpm_uart_line_idle.patch
+```
+
+The old UART IRQ/DMA probes, URT/FLT1 diagnostic Ready pages, lease diagnostic
+counters and line-idle error counters were removed on 2026-10-22. The 64-byte
+Ready still negotiates version, session, capabilities and transfer sizes;
+reserved diagnostic bytes remain zero. Firmware loss-of-host stopping remains.
+
+The prior matched diagnostic build completed short enabled robot runs. This
+clean build compiles successfully but has not yet been flashed/retested on the
+robot. Historical UART investigation notes are evidence, not current build
+instructions. Preserve existing runtime behavior when deploying this cleanup.
