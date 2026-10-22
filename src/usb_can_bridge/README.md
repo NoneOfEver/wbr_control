@@ -1,80 +1,17 @@
-# dust-hpm6750 USB acquisition gateway
+# USB 网关已迁移
 
-Independent forwarding firmware. It starts shared CAN/CherryUSB drivers and
-hardware acquisition, not chassis control, AHRS, VOFA, RTT or pressure tests.
-USB is HS Bulk with a 128-byte OUT buffer and 64-byte IN messages. Motor commands
-are submitted in W/B/D FIFO order separately on CAN3 (left) and CAN2 (right).
-CAN/USB acquisition callbacks are operational subscriptions; the forwarding build
-compiles out the trace tap and legacy local feedback routing. No sampled latency
-recorder is linked. It uses the existing standard batch driver API, without
-requiring the experimental hardware-trigger trace extension.
+正式固件现在独立维护于：
+https://github.com/HNUST-Dust/dust-adapter/tree/main/apps/usb_gateway
 
-Build from the existing Zephyr workspace:
+本目录不再提供 Zephyr 应用或复制维护驱动。原控制工程共享的 CAN/USB 代码
+继续供原控制器使用，但新网关不再依赖此仓库。
+
+在 dust-adapter 的 West workspace 中构建：
 
 ```bash
-west build -b dust-hpm6750 -s wbr_control/src/usb_can_bridge \
-  -d wbr_control/build/usb_can_bridge
-west flash -d wbr_control/build/usb_can_bridge
+./dust-adapter/scripts/build.sh usb
 ```
 
-The matching Linux host is the independent `chassis_controller/` target in
-`wbr_control_companion`, branch `feature/usb-can-host-controller`. It rejects
-legacy test firmware through a 64-byte version/capability handshake before
-sending 128-byte command packets.
-
-## Peripherals
-
-- Standard CAN data on configured CAN controllers is accepted; known motor
-  feedback uses latest-state mailboxes, other accepted IDs are forwarded through
-  a bounded queue. Host commands are restricted to the six production motor IDs.
-- UART10 retains the board's SBUS 100000 8E2 configuration and async double-buffer
-  reception. UART2 retains HI91 921600 and the proven continuous-DMA ring/16-byte
-  outstanding-write guard. Protocol parsing now runs on NUC.
-- Board-mounted SPI IMU transport is reused to forward raw bursts and temperature,
-  without an MCU estimator/controller. A failing sensor is absent from capability
-  bits instead of fabricating valid data.
-- An optional `wbr-control,referee-uart` chosen node enables a third forwarded UART.
-  This board has no such declaration currently; no pin assignment is invented.
-
-Capability bits in Ready: CAN=1, remote UART=2, HI91 UART=4, raw onboard IMU=8,
-referee UART=16. The host requires CAN, remote UART and HI91 UART to initialize,
-then independently requires fresh valid data before accepting remote enable.
-
-## Failure behavior
-
-Hello performs a local stop and starts a new session. Entire command packets are
-validated for version, session, sequence, motor address and slots before any
-publication. Invalid/replayed packets do not renew the lease. A disconnect or
-20 ms without a valid new command submits zero wheel currents and DM exit frames,
-invalidates the session, and requires a new handshake. The same shutdown runs
-on explicit Stop. This is software loss-of-host handling, not an independent
-hardware emergency-stop guarantee if the MCU or CAN hardware itself fails.
-
-No per-cycle ACK, stress command, profiling query, timestamp export, VOFA,
-printk or logging backend is enabled. Small acquisition timestamps remain in
-sensor messages because freshness is a control input requirement.
-
-## Production UART10 driver dependency
-
-UART10 line-idle reception is now a default production function. It preserves
-128-byte DMA double buffers, non-cacheable memory and the independent 1000-us
-RX-edge idle detector. Do not disable it as part of removing diagnostics.
-
-The matching HPM UART changes are preserved as
-`patches/hpm_uart_line_idle.patch`. From the Zephyr workspace, apply only to a
-clean UART driver that does not already contain these changes:
-
-```bash
-git -C hpm_support apply --check ../wbr_control/src/usb_can_bridge/patches/hpm_uart_line_idle.patch
-git -C hpm_support apply ../wbr_control/src/usb_can_bridge/patches/hpm_uart_line_idle.patch
-```
-
-The old UART IRQ/DMA probes, URT/FLT1 diagnostic Ready pages, lease diagnostic
-counters and line-idle error counters were removed on 2026-10-22. The 64-byte
-Ready still negotiates version, session, capabilities and transfer sizes;
-reserved diagnostic bytes remain zero. Firmware loss-of-host stopping remains.
-
-The prior matched diagnostic build completed short enabled robot runs. This
-clean build compiles successfully but has not yet been flashed/retested on the
-robot. Historical UART investigation notes are evidence, not current build
-instructions. Preserve existing runtime behavior when deploying this cleanup.
+UART10 功能补丁、固定版本依赖和完整步骤见新仓库 README。保留的
+UART10_INVESTIGATION.md 仅是历史证据，不是当前构建说明。
+旧固件源码可从此仓库 afc2e2d 及更早版本查阅。迁移没有自动刷写板子。

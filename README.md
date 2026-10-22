@@ -138,3 +138,11 @@ git push origin v0.1.0
 Copyright 2026 .noe
 
 除非文件中另有声明，本项目采用 [Apache License 2.0](LICENSE) 开源。第三方组件及明确标注其他 SPDX 标识符的文件继续遵循各自的许可证。
+
+
+## 独立通讯适配固件
+
+USB 网关和 HPM5E3Y EtherCAT 从站基础已于 2026-10-22 迁到
+https://github.com/HNUST-Dust/dust-adapter 。后续在该仓库维护和构建；
+本仓库保留原控制算法及其硬件接口，不再重复维护独立适配应用。
+EtherCAT 本次仅迁出现有从站基础，尚不是 CAN/UART/IMU 转发固件。
